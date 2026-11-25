@@ -6,6 +6,7 @@
 <title>Java Flow Explorer</title>
 <style>
 :root{
+  --mark:#ffe58a;
   --bg:#f4f5f7; --panel:#ffffff; --panel2:#f9fafb; --line:#dfe3e8; --text:#1c2430; --mute:#6b7685;
   --accent:#2457d6; --accent-bg:#e8eefc; --hover:#eef1f5; --sel:#dde7fd;
   --c-ctl:#2457d6; --c-svc:#0d8a5f; --c-dao:#b3610b; --c-sql:#8a3fc4; --c-tbl:#c2304a; --c-mdl:#6b7685; --c-utl:#4a7a8c; --c-etc:#7a7f87;
@@ -15,6 +16,7 @@
 }
 @media (prefers-color-scheme: dark){
   :root{
+    --mark:#6b5600;
     --bg:#14171c; --panel:#1b1f26; --panel2:#20252d; --line:#2f3640; --text:#e3e7ec; --mute:#8d97a5;
     --accent:#7aa2ff; --accent-bg:#22304f; --hover:#262c36; --sel:#2a3a5e;
     --c-ctl:#7aa2ff; --c-svc:#4fcf9d; --c-dao:#f0a34e; --c-sql:#c58df5; --c-tbl:#f27f95; --c-mdl:#8d97a5; --c-utl:#7fb7cc; --c-etc:#9aa0a8;
@@ -121,7 +123,7 @@ header .sp{flex:1}
 #prog div{height:100%;width:0;background:var(--accent)}
 /* detail */
 #dbody{flex:1;overflow:auto;min-height:0}
-.dsec{padding:10px 12px;border-bottom:1px solid var(--line)}
+.dsec{padding:10px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2;background:var(--panel);max-height:58%;overflow:auto}
 .dsec h4{margin:0 0 4px;font:600 13px var(--mono);word-break:break-all}
 .dsec .kv{color:var(--mute);font-size:12px;word-break:break-all}
 .dsec .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
@@ -133,6 +135,21 @@ pre.src .l.hl{background:var(--accent-bg)}
 pre.sql{margin:0;padding:10px 12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word}
 .empty{color:var(--mute);padding:24px;text-align:center}
 .doc{color:var(--code-cm);font-family:var(--sans);font-size:12px}
+mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
+.hit{background:var(--mark)!important;border-radius:3px}
+#stabs button{padding:7px 7px}
+.fh{display:flex;gap:8px;align-items:baseline;cursor:pointer;padding:2px 0 4px;font-family:var(--mono);font-size:12.5px}
+.fh b{font-weight:600}.fh .dir{color:var(--mute);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fh:hover b{color:var(--accent)}
+.mh{font-size:12px;color:var(--mute);padding:5px 0 1px 4px;cursor:pointer;display:flex;gap:6px;align-items:center;font-family:var(--mono)}
+.mh:hover{color:var(--accent)}
+.hr{display:flex;gap:8px;font:12px/1.6 var(--mono);padding:0 4px 0 14px;cursor:pointer;border-radius:3px;white-space:pre;overflow:hidden}
+.hr:hover{background:var(--hover)}.hr.on{background:var(--sel)}
+.hr .ln{color:var(--mute);min-width:42px;text-align:right;flex:none}
+.chain{display:flex;flex-wrap:wrap;gap:3px 2px;align-items:center;margin:5px 0;padding:5px 6px;background:var(--panel2);border-radius:6px;font-size:12px}
+.chain .ar{color:var(--mute);margin:0 2px}
+.chain .chip{margin:0}
+.chain .here{border-color:var(--accent);background:var(--accent-bg);font-weight:600}
 .ft{width:100%;border-collapse:collapse;font-size:12px}
 .ft td{padding:2px 8px 2px 0;vertical-align:top;border-bottom:1px solid var(--line)}
 .ft td.n{font-family:var(--mono);white-space:nowrap}
@@ -154,13 +171,14 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
   <h1>Java Flow Explorer</h1>
   <span id="proj"></span>
   <div class="searchwrap hide" id="swrap">
-    <input type="text" id="gq" placeholder="통합 검색: 클래스 · 메서드 · 필드 · URL · SQL · 테이블 · 주석 내용  ( / 키)" autocomplete="off">
+    <input type="text" id="gq" placeholder="이름·주석 검색 ( / 키), Enter: 소스 전체 문자열 검색" autocomplete="off">
     <div id="gres"></div>
   </div>
   <span class="sp"></span>
   <label style="color:var(--mute)">인코딩
     <select id="enc"><option value="auto">자동</option><option value="utf-8">UTF-8</option><option value="euc-kr">EUC-KR/MS949</option></select>
   </label>
+  <button id="btnFind" class="hide" title="모든 소스에서 문자열 찾기 (Ctrl+Shift+F)">소스 검색</button>
   <button id="btnOpen" class="pri">프로젝트 폴더 선택</button>
   <input type="file" id="dir" webkitdirectory multiple class="hide">
 </header>
@@ -179,6 +197,7 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
       <li>모든 분석은 이 브라우저 안에서만 수행됩니다. 네트워크 통신이 전혀 없으며 소스가 PC 밖으로 나가지 않습니다.</li>
       <li>브라우저가 "파일 N개를 업로드하시겠습니까?"라고 묻는 것은 로컬 파일 읽기 허용 확인이며 실제 전송은 없습니다.</li>
       <li>메서드·클래스 위의 주석(Javadoc)과 본문 주석, SQL XML 주석을 흐름에 함께 표시하고 주석 내용으로도 검색됩니다.</li>
+      <li>"소스 검색"으로 모든 소스에서 문자열을 찾고, 그 줄이 어느 화면(URL)에서 어떤 경로로 실행되는지 확인할 수 있습니다.</li>
       <li>.java / .xml 파일을 읽어 URL → Controller → Service → DAO → SQL → 테이블 흐름을 구성합니다.</li>
       <li>Spring XML 빈 설정, Anyframe Query 매핑, iBATIS/MyBatis SQL 맵, Struts 설정, 소스 내 인라인 SQL을 인식합니다.</li>
     </ul>
@@ -211,12 +230,23 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
  * ===================================================================== */
 function isIdStart(c){return (c>=65&&c<=90)||(c>=97&&c<=122)||c===95||c===36||c>127;}
 function isIdPart(c){return isIdStart(c)||(c>=48&&c<=57);}
+const NAME_TAGS=['name_ko','name_kr','nameko','namekr','name_kor','kor_name','ko_name','title','name','메소드명','메서드명','기능명','함수명','명칭'];
+const DESC_TAGS=['desc','description','desc_ko','brief','summary','comment','note','설명','개요','기능','처리내용'];
 function makeDoc(raw,l){
-  const lines=raw.split('\n').map(x=>x.replace(/\r/g,'').replace(/\*+\/\s*$/,'').replace(/^\s*(\/\*+|\*+|\/\/+)?\s?/,'').replace(/\s+$/,'')).filter(x=>!/^[\s\-=*#~_+.]*$/.test(x));
+  const lines=raw.split('\n').map(x=>x.replace(/\r/g,'').replace(/\*+\/\s*$/,'').replace(/^\s*(\/\*+|\*+|\/\/+)?\s?/,'').replace(/<\/?(pre|br|p|b|i|u|code|ul|ol|li|strong|em|tt|font|span|div)(\s[^>]*)?\/?>/gi,'').replace(/\s+$/,'')).filter(x=>!/^[\s\-=*#~_+.]*$/.test(x));
   if(!lines.length)return null;
-  let sum='';for(const x of lines){const y=x.replace(/<[^>]+>/g,'').trim();if(!y||y[0]==='@')continue;sum=y;break;}
+  const tags={};let cur=null,free='';
+  for(const x of lines){const y=x.trim(),t=y.match(/^@([A-Za-z_ㄱ-힣][\wㄱ-힣]*)\s*[:：=\-]?\s*(.*)$/);
+    if(t){cur=t[1].toLowerCase();if(tags[cur]===undefined)tags[cur]=t[2].trim();}
+    else if(cur){if(tags[cur]==='')tags[cur]=y;}
+    else if(!free)free=y.replace(/<[^>]+>/g,'').trim();}
+  let name='',desc='';
+  for(const k of NAME_TAGS)if(tags[k]){name=tags[k];break;}
+  for(const k of DESC_TAGS)if(tags[k]){desc=tags[k];break;}
+  const pathLike=free&&/^[\x21-\x7e\s]+$/.test(free)&&/[.\\\/|]/.test(free)&&!/\s[a-z]+\s/.test(free);
+  let sum=name||(pathLike?'':free)||desc||free;
   if(sum.length>90)sum=sum.slice(0,88)+'…';
-  return {text:lines.join('\n'),sum,l};
+  return {text:lines.join('\n'),sum,l,name,desc};
 }
 function tokenize(src,base,line0,cm){
   base=base||0; const toks=[]; let i=0,line=line0||1; const n=src.length;
@@ -669,6 +699,8 @@ function buildModel(){
     for(const m of ms)addE('XML',ms.length>1?u.url+' #'+m.name:u.url,'',m);}
   for(const c of db.classes){if(c.layer!=='controller')continue;
     for(const m of c.methods)if(!m.entries.length&&!m.inn.length&&m.mods.includes('public')&&!m.acc&&!m.abstract&&m.out.length)addE('CTRL','(매핑 미확인) '+c.simple+'.'+m.name,'',m);}
+  db.fileMethods=new Map();for(const m of db.methods){const f=m.cls.file;if(!db.fileMethods.has(f))db.fileMethods.set(f,[]);db.fileMethods.get(f).push(m);}
+  db.fileSqls=new Map();for(const q of db.sqls)if(q.kind==='xml'){if(!db.fileSqls.has(q.file))db.fileSqls.set(q.file,[]);db.fileSqls.get(q.file).push(q);}
   db.entries.sort((a,b)=>a.url<b.url?-1:a.url>b.url?1:0);
   db.sqls.sort((a,b)=>a.sid<b.sid?-1:1);
 }
@@ -747,7 +779,7 @@ const docSpan=x=>x&&S.showDoc?h('span',{class:'doc',text:'— '+x,title:x}):null
 
 function showWelcome(busy){$('welcome').classList.remove('hide');$('app').classList.add('hide');}
 function startUI(){
-  $('welcome').classList.add('hide');$('app').classList.remove('hide');$('swrap').classList.remove('hide');
+  $('welcome').classList.add('hide');$('app').classList.remove('hide');$('swrap').classList.remove('hide');$('btnFind').classList.remove('hide');
   $('proj').textContent=DB.name?'📁 '+DB.name:'';$('proj').title=DB.name;
   S.sel=null;S.hist=[];S.stab=DB.entries.length?'entry':'class';
   renderSideTabs();renderSide();render();
@@ -755,7 +787,7 @@ function startUI(){
 }
 /* ---------- 좌측 목록 ---------- */
 function renderSideTabs(){
-  const defs=[['entry','진입점',DB.entries.length],['class','클래스',DB.classes.length],['sql','SQL',DB.sqls.length],['table','테이블',DB.tables.size]];
+  const defs=[['entry','진입점',DB.entries.length],['class','클래스',DB.classes.length],['sql','SQL',DB.sqls.length],['table','테이블',DB.tables.size],['file','파일',DB.srcs.size]];
   const el=$('stabs');el.innerHTML='';
   for(const [k,l,n] of defs)el.appendChild(h('button',{class:S.stab===k?'on':'',onclick:()=>{S.stab=k;$('sq').value='';renderSideTabs();renderSide();}},l+' ',h('small',{text:String(n)})));
 }
@@ -784,6 +816,12 @@ function renderSide(){
       add(h('div',{class:'li'+(S.sel&&S.sel.sql===s?' on':''),onclick:()=>select({t:'sql',sql:s})},
         h('div',{class:'t1'},badge('sql'),h('span',{text:s.sid,title:s.sid}),s.callers.length?null:h('span',{class:'tag warn',text:'미사용?'})),
         h('div',{class:'t2',text:(s.sum?s.sum+'  ·  ':'')+(s.tables.map(t=>t.name).join(', ')||s.file)})));}
+  }else if(S.stab==='file'){
+    for(const fp of [...DB.srcs.keys()].sort()){if(!hit(fp))continue;
+      const i=fp.lastIndexOf('/'),isJ=/\.java$/i.test(fp),n=isJ?(DB.fileMethods.get(fp)||[]).length:(DB.fileSqls.get(fp)||[]).length;
+      add(h('div',{class:'li'+(S.sel&&S.sel.path===fp?' on':''),onclick:()=>select({t:'f',path:fp})},
+        h('div',{class:'t1'},h('span',{class:'bd '+(isJ?'etc':'sql'),text:isJ?'J':'X'}),h('span',{text:fp.slice(i+1)}),h('span',{class:'tag',text:n+(isJ?' 메서드':' SQL')})),
+        h('div',{class:'t2',text:fp.slice(0,Math.max(0,i)),title:fp})));}
   }else{
     const list=[...DB.tables.values()].sort((a,b)=>a.name<b.name?-1:1);
     for(const t of list){if(!hit(t.name))continue;
@@ -801,8 +839,8 @@ function select(sel,noHist){
   S.sel=sel;
   if(sel){
     if(sel.t==='m'){if(!['flow','seq','logic','rev'].includes(S.tab))S.tab='flow';}
-    else if(sel.t==='c')S.tab='cls';else S.tab='rev';
-    focusDetail(sel.t==='m'?{t:'m',m:sel.m}:sel.t==='sql'?{t:'sql',sql:sel.sql}:sel.t==='c'?{t:'c',cls:sel.cls}:null);
+    else if(sel.t==='c')S.tab='cls';else if(sel.t==='q')S.tab='q';else if(sel.t==='f')S.tab='file';else S.tab='rev';
+    if(sel.t==='f')focusDetail({t:'file',path:sel.path,line:0});else if(sel.t!=='q')focusDetail(sel.t==='m'?{t:'m',m:sel.m}:sel.t==='sql'?{t:'sql',sql:sel.sql}:sel.t==='c'?{t:'c',cls:sel.cls}:null);
   }
   renderSide();render();
 }
@@ -814,6 +852,7 @@ function render(){
   if(!sel){head.appendChild(h('span',{class:'ttl',text:'분석 요약'}));head.appendChild(h('span',{class:'sub',text:DB.name}));tabs.classList.add('hide');tool.classList.add('hide');renderDash(view);return;}
   head.appendChild(h('button',{onclick:back,title:'뒤로'},'←'));
   head.appendChild(h('button',{onclick:()=>{S.hist=[];select(null,true);},title:'요약으로'},'요약'));
+  if(sel.t==='q'||sel.t==='f'){tabs.classList.add('hide');(sel.t==='q'?renderSearch:renderFile)(head,tool,view,sel);return;}
   if(sel.t==='m'){const m=sel.m;head.appendChild(badge(m.cls.layer));head.appendChild(h('span',{class:'ttl',text:mLabel(m)}));
     head.appendChild(h('span',{class:'sub',text:[m.sum,m.entries.map(e=>e.url).join(', ')||m.cls.pkg].filter(Boolean).join('  ·  ')}));}
   else if(sel.t==='sql'){head.appendChild(badge('sql'));head.appendChild(h('span',{class:'ttl',text:sel.sql.sid}));head.appendChild(h('span',{class:'sub',text:sel.sql.file}));}
@@ -1037,6 +1076,7 @@ function renderLogic(view,m){
     n.cs=n.ha!==undefined?calls(n.ha,n.hb):[];
     const any=l=>(l||[]).map(vis).some(Boolean);
     let v=S.showAll||n.cs.length>0;
+    if(HL&&T[n.p0]&&(n.ha!==undefined&&n.k!=='if'&&n.k!=='loop'&&n.k!=='switch'?T[n.p0].l<=HL&&HL<=T[Math.min(n.p1,T.length-1)].l:n.l===HL)){n.hit=true;v=true;}
     if(n.k==='return'||n.k==='throw')v=true;
     if(n.k==='jump')v=S.showAll;
     if(n.k==='if'){const a=any(n.then),b=any(n.els);v=v||a||b;}
@@ -1046,8 +1086,9 @@ function renderLogic(view,m){
     if(n.k==='try'){const a=any(n.body);let b=false;for(const c of n.catches)if(any(c.body))b=true;const f=any(n.fin);v=v||a||b||f;}
     return n.v=v;
   };
+  const HL=S.hl&&S.hl.m===m?S.hl.line:0;
   const flushC=(box,upto)=>{while(ci<CM.length&&CM[ci].b<=upto){const c=CM[ci++];if(!S.showDoc)continue;const d=makeDoc(c.text,c.l);if(d&&!/[;{}]\s*$/.test(d.text))box.appendChild(h('div',{class:'lc',text:'// '+d.text.replace(/\n/g,' ')}));}};
-  const list=(l,box)=>{for(const n of l||[]){const a=T[n.p0],z=T[n.p1];if(a)flushC(box,a.a);if(vis(n))box.appendChild(draw(n));if(z)while(ci<CM.length&&CM[ci].a<z.b)ci++;}return box;};
+  const list=(l,box)=>{for(const n of l||[]){const a=T[n.p0],z=T[n.p1];if(a)flushC(box,a.a);if(vis(n)){const d=draw(n);if(n.hit)(d.classList.contains('ls')?d:d.querySelector('.lh')||d).classList.add('hit');box.appendChild(d);}if(z)while(ci<CM.length&&CM[ci].a<z.b)ci++;}return box;};
   const head=(label,code,cs)=>h('div',{class:'lh'},h('b',{text:label}),code||'',chips(cs||[]));
   function draw(n){
     switch(n.k){
@@ -1072,6 +1113,117 @@ function renderLogic(view,m){
   if(m.doc&&S.showDoc)view.appendChild(h('div',{class:'docbox',style:'margin:0 0 10px',text:m.doc}));
   view.appendChild(h('p',{class:'note',text:mSig(m)+'  —  색 막대: 파랑=조건, 초록=반복, 주황=예외처리. 칩을 클릭하면 호출 대상 소스를 볼 수 있습니다.'}));
   view.appendChild(box);
+  if(HL){const x=box.querySelector('.hit');if(x)x.scrollIntoView({block:'center'});else view.insertBefore(h('p',{class:'note',style:'color:var(--warn)',text:HL+'행은 문장 밖(주석 등)이거나 숨겨진 블록 안이라 개요에 표시되지 않습니다. 오른쪽 소스를 확인하세요.'}),view.firstChild);}
+}
+/* ---------- 소스 전체 검색 / 파일 보기 ---------- */
+function methodAt(path,line){let best=null;for(const m of (DB.fileMethods.get(path)||[])){if((m.dl||m.sl)<=line&&line<=m.endLine&&(!best||m.endLine-m.sl<best.endLine-best.sl))best=m;}return best;}
+function sqlAt(path,line){let best=null;for(const q of (DB.fileSqls.get(path)||[])){if(q.line<=line&&(!best||q.line>best.line))best=q;}return best;}
+function runSearch(o){
+  const res={files:[],total:0,cut:false,err:''};if(!o.q)return res;
+  let re;try{re=new RegExp(o.regex?o.q:o.q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'+(o.cs?'':'i'));}catch(e){res.err='정규식 오류: '+e.message;return res;}
+  const MAX=3000;
+  for(const p of [...DB.srcs.keys()].sort()){
+    const isJ=/\.java$/i.test(p);if((o.scope==='java'&&!isJ)||(o.scope==='xml'&&isJ))continue;
+    const src=DB.srcs.get(p);re.lastIndex=0;let m,hits=null,pos=0,line=1;
+    while((m=re.exec(src))){
+      if(m[0]===''){re.lastIndex++;continue;}
+      for(let k=pos;k<m.index;k++)if(src.charCodeAt(k)===10)line++;
+      pos=m.index;
+      const ls=src.lastIndexOf('\n',m.index-1)+1;let le=src.indexOf('\n',m.index);if(le<0)le=src.length;
+      (hits=hits||[]).push({line,text:src.slice(ls,le).replace(/\r$/,''),a:m.index-ls,b:Math.min(le,m.index+m[0].length)-ls});
+      res.total++;re.lastIndex=le;
+      if(res.total>=MAX){res.cut=true;break;}
+    }
+    if(hits)res.files.push({path:p,hits});
+    if(res.cut)break;
+  }
+  return res;
+}
+function openSearch(q){select({t:'q',o:{q:q||'',cs:false,regex:false,scope:'all'},res:null});const f=$('fq');if(f){f.focus();f.select();}}
+function renderSearch(head,tool,view,sel){
+  const o=sel.o;
+  head.appendChild(h('span',{class:'ttl',text:'소스 전체 검색'}));
+  head.appendChild(h('span',{class:'sub',text:'문자열이 들어 있는 소스를 찾고, 그 위치가 흐름의 어디인지 확인합니다'}));
+  tool.classList.remove('hide');
+  const go=()=>{o.q=$('fq').value;sel.res=null;render();const f=$('fq');f.focus();f.setSelectionRange(f.value.length,f.value.length);};
+  const chk=(k,l)=>h('label',null,h('input',Object.assign({type:'checkbox',onchange:e=>{o[k]=e.target.checked;sel.res=null;o.q=$('fq').value;render();}},o[k]?{checked:''}:{})),l);
+  const sc=h('select',{onchange:e=>{o.scope=e.target.value;sel.res=null;o.q=$('fq').value;render();}});
+  for(const [v,l] of [['all','Java + XML'],['java','Java만'],['xml','XML만']])sc.appendChild(h('option',Object.assign({value:v},o.scope===v?{selected:''}:{}),l));
+  tool.append(h('input',{type:'text',id:'fq',value:o.q,placeholder:'찾을 문자열 입력 후 Enter (예: 테이블명, 에러코드, 변수명, 주석 문구)',style:'flex:1;min-width:220px',onkeydown:e=>{if(e.key==='Enter')go();}}),h('button',{class:'pri',onclick:go},'검색'),chk('cs','대소문자 구분'),chk('regex','정규식'),sc);
+  if(!o.q){view.appendChild(h('div',{class:'empty',text:'찾을 문자열을 입력하세요. 결과의 줄을 클릭하면 오른쪽에 해당 소스와 "흐름상 위치"(어느 화면/URL에서 어떤 경로로 도달하는지)가 표시됩니다.'}));return;}
+  if(!sel.res)sel.res=runSearch(o);
+  const res=sel.res;
+  if(res.err){view.appendChild(h('div',{class:'empty',text:res.err}));return;}
+  view.appendChild(h('p',{class:'note',text:'"'+o.q+'" — 파일 '+res.files.length+'개, '+res.total+'줄'+(res.cut?' 이상 (3,000줄에서 중단 — 검색어를 구체화하세요)':'')+'.  줄 클릭: 소스와 흐름상 위치 표시 / 메서드명 클릭: 그 메서드의 흐름으로 이동'}));
+  if(!res.total){view.appendChild(h('div',{class:'empty',text:'일치하는 내용이 없습니다.'}));return;}
+  let onRow=null;
+  for(const f of res.files){
+    const i=f.path.lastIndexOf('/'),isJ=/\.java$/i.test(f.path);
+    const box=h('div',{class:'box',style:'margin-bottom:10px;padding:8px 10px'});
+    box.appendChild(h('div',{class:'fh',title:'파일 구조 보기',onclick:()=>select({t:'f',path:f.path})},h('b',{text:f.path.slice(i+1)}),h('span',{class:'tag',text:f.hits.length+'줄'}),h('span',{class:'dir',text:f.path.slice(0,Math.max(0,i))})));
+    let last;
+    for(const ht of f.hits.slice(0,300)){
+      const m=isJ?methodAt(f.path,ht.line):null,q=isJ?null:sqlAt(f.path,ht.line),own=m||q||null;
+      if(own!==last){last=own;
+        if(m)box.appendChild(h('div',{class:'mh',onclick:()=>select({t:'m',m})},badge(m.cls.layer),h('span',{style:'color:var(--text)',text:mLabel(m)}),m.sum?h('span',{class:'doc',text:'— '+m.sum}):null,m.entries[0]?h('span',{class:'tag url',text:m.entries[0].url}):null));
+        else if(q)box.appendChild(h('div',{class:'mh',onclick:()=>select({t:'sql',sql:q})},badge('sql'),h('span',{style:'color:var(--text)',text:q.sid}),q.sum?h('span',{class:'doc',text:'— '+q.sum}):null));
+        else box.appendChild(h('div',{class:'mh',style:'cursor:default',text:isJ?'(메서드 밖: 필드 · import · 클래스 주석 등)':'(SQL 밖)'}));}
+      const lead=ht.text.length-ht.text.replace(/^\s+/,'').length,cut=Math.min(lead,ht.a);
+      const t=ht.text.slice(cut,cut+400),a=ht.a-cut,b=ht.b-cut;
+      const row=h('div',{class:'hr'},h('span',{class:'ln',text:String(ht.line)}),h('span',null,t.slice(0,a),h('mark',{text:t.slice(a,b)}),t.slice(b)));
+      row.onclick=()=>{if(onRow)onRow.classList.remove('on');row.classList.add('on');onRow=row;
+        if(m)focusDetail({t:'m',m,line:ht.line});else if(q)focusDetail({t:'sql',sql:q});else focusDetail({t:'file',path:f.path,line:ht.line});};
+      row.ondblclick=()=>{if(m){S.hl={m,line:ht.line};select({t:'m',m});S.tab='logic';render();}};
+      box.appendChild(row);
+    }
+    if(f.hits.length>300)box.appendChild(h('div',{class:'more',text:'… 이 파일에서 '+(f.hits.length-300)+'줄 더'}));
+    view.appendChild(box);
+  }
+}
+function renderFile(head,tool,view,sel){
+  const fp=sel.path,i=fp.lastIndexOf('/'),isJ=/\.java$/i.test(fp);
+  head.appendChild(h('span',{class:'bd '+(isJ?'etc':'sql'),text:isJ?'J':'X'}));
+  head.appendChild(h('span',{class:'ttl',text:fp.slice(i+1)}));head.appendChild(h('span',{class:'sub',text:fp.slice(0,Math.max(0,i)),title:fp}));
+  tool.classList.add('hide');
+  view.appendChild(h('p',{class:'note',text:'이 파일에 들어 있는 '+(isJ?'클래스와 메서드':'SQL')+'입니다. 항목을 클릭하면 흐름 화면으로 이동합니다. 전체 소스는 오른쪽에 표시됩니다.'}));
+  if(isJ){
+    const cs=DB.classes.filter(c=>c.file===fp);
+    if(!cs.length)view.appendChild(h('div',{class:'empty',text:'클래스를 찾지 못했습니다.'}));
+    for(const c of cs){
+      const b=h('div',{class:'box',style:'margin-bottom:12px'});
+      b.appendChild(h('div',{class:'rk',onclick:()=>select({t:'c',cls:c})},badge(c.layer),h('span',{class:'nm'},h('b',{text:c.name}),c.sum?h('span',{class:'doc',text:'  — '+c.sum}):null),h('span',{class:'v',text:'L'+c.line})));
+      for(const m of c.methods)b.appendChild(h('div',{class:'rk',style:'padding-left:22px',onclick:()=>select({t:'m',m})},h('span',{class:'nm'},m.name+'()',m.sum?h('span',{class:'doc',text:'  — '+m.sum}):null),m.entries[0]?h('span',{class:'tag url',text:m.entries[0].url}):null,h('span',{class:'v',text:'L'+m.line+'–'+m.endLine+' · 피호출 '+m.inn.length})));
+      view.appendChild(b);
+    }
+  }else{
+    const b=h('div',{class:'box'});const qs=DB.fileSqls.get(fp)||[];
+    if(!qs.length)b.appendChild(h('div',{class:'note',text:'SQL 정의가 없는 설정 파일입니다 (빈 설정 · URL 매핑 등).'}));
+    for(const q of qs)b.appendChild(h('div',{class:'rk',onclick:()=>select({t:'sql',sql:q})},badge('sql'),h('span',{class:'nm'},q.sid,q.sum?h('span',{class:'doc',text:'  — '+q.sum}):null),h('span',{class:'v',text:'L'+q.line+' · 사용 '+q.callers.length})));
+    view.appendChild(b);
+  }
+}
+/* 진입점 → 해당 메서드까지의 최단 경로들 */
+function chainsTo(m,max){
+  const out=[],par=new Map([[m,null]]),q=[m];let n=0;
+  while(q.length&&out.length<max&&n++<8000){
+    const x=q.shift();
+    if(x.entries.length){const path=[];for(let c=x;c;c=par.get(c))path.push(c);out.push({e:x.entries[0],more:x.entries.length-1,path});if(x!==m)continue;}
+    for(const i of x.inn)if(!par.has(i.from)){par.set(i.from,x);q.push(i.from);}
+  }
+  return out;
+}
+function chainBox(m,line){
+  const cs=chainsTo(m,6),d=h('div',{style:'margin-top:8px'});
+  d.appendChild(h('div',{class:'kv',text:'흐름상 위치 (진입점 → 여기까지의 경로)'}));
+  if(!cs.length){d.appendChild(h('div',{class:'chain',style:'color:var(--mute)',text:m.inn.length?'진입점(URL)까지 이어지는 경로를 찾지 못했습니다. "역추적"에서 호출하는 쪽을 확인하세요.':'이 메서드를 호출하는 곳을 찾지 못했습니다 (미사용이거나 리플렉션·설정 기반 호출).'}));return d;}
+  for(const c of cs){
+    const el=h('div',{class:'chain'},h('span',{class:'tag url',text:(c.e.http?c.e.http+' ':'')+c.e.url+(c.more?' 외 '+c.more:'')}));
+    c.path.forEach((x,i)=>{el.appendChild(h('span',{class:'ar',text:'→'}));
+      const here=x===m;el.appendChild(h('span',{class:'chip'+(here?' here':''),title:x.sum||'',onclick:()=>select({t:'m',m:x})},badge(x.cls.layer),mLabel(x)+(here&&line?'  L'+line:'')));});
+    d.appendChild(el);
+  }
+  if(cs.length>=6)d.appendChild(h('div',{class:'kv',text:'경로가 더 있습니다. 전체는 "역추적"에서 확인하세요.'}));
+  return d;
 }
 /* ---------- 필드 표 ---------- */
 function fieldTable(c){
@@ -1158,9 +1310,10 @@ function focusDetail(it){
     if(m.entries.length)sec.appendChild(h('div',{class:'kv'},m.entries.map(e=>h('span',{class:'tag url',text:(e.http?e.http+' ':'')+e.url}))));
     sec.appendChild(h('div',{class:'acts'},
       h('button',{onclick:()=>{S.tab='flow';select({t:'m',m});}},'이 메서드 기준 흐름'),
-      h('button',{onclick:()=>{select({t:'m',m});S.tab='logic';render();}},'로직 개요'),
+      h('button',{onclick:()=>{S.hl=it.line?{m,line:it.line}:null;select({t:'m',m});S.tab='logic';render();}},it.line?'로직 개요에서 이 줄 보기':'로직 개요'),
       h('button',{onclick:()=>{select({t:'m',m});S.tab='rev';render();}},'역추적'),
       h('button',{onclick:()=>select({t:'c',cls:m.cls})},'클래스 보기')));
+    sec.appendChild(chainBox(m,it.line));
     {const vos=relatedVOs(m);if(vos.length){const d=h('div',{style:'margin-top:8px'},h('div',{class:'kv',text:'이 메서드가 다루는 VO (펼치면 항목과 주석 표시)'}));
       vos.forEach((c,i)=>{const det=h('details',Object.assign({class:'vo'},vos.length===1?{open:''}:{}),h('summary',null,badge(c.layer),' '+c.simple+(c.sum?'  — '+c.sum:'')),h('div',{class:'scroll'},fieldTable(c)));d.appendChild(det);});sec.appendChild(d);}}
     box.appendChild(sec);
@@ -1174,6 +1327,11 @@ function focusDetail(it){
     if(s.tables.length)sec.appendChild(h('div',{class:'kv',style:'margin-top:4px'},s.tables.map(t=>h('span',{class:'tag tb',text:t.name+' ('+t.ops+')',onclick:()=>select({t:'table',tb:DB.tables.get(t.name)})}))));
     sec.appendChild(h('div',{class:'acts'},h('button',{onclick:()=>select({t:'sql',sql:s})},'이 SQL을 쓰는 곳 역추적')));
     box.appendChild(sec);box.appendChild(h('pre',{class:'sql',text:s.text.replace(/\n[ \t]{6,}/g,'\n    ')}));
+  }else if(it.t==='file'){
+    const sec=h('div',{class:'dsec'}),i=it.path.lastIndexOf('/');
+    sec.appendChild(h('h4',{text:it.path.slice(i+1)}));sec.appendChild(h('div',{class:'kv',text:it.path+(it.line?' : '+it.line+'행':'')}));
+    if(it.line)sec.appendChild(h('div',{class:'acts'},h('button',{onclick:()=>select({t:'f',path:it.path})},'파일 구조 보기')));
+    box.appendChild(sec);box.appendChild(it.line?srcBlock(it.path,it.line-80,it.line+200,it.line):srcBlock(it.path,1,6000,0));
   }else if(it.t==='c'){
     const c=it.cls,sec=h('div',{class:'dsec'});
     sec.appendChild(h('h4',null,badge(c.layer),' '+c.simple));sec.appendChild(h('div',{class:'kv',text:c.file}));if(c.doc)sec.appendChild(h('div',{class:'docbox',text:c.doc}));
@@ -1183,9 +1341,10 @@ function focusDetail(it){
 }
 /* ---------- 통합 검색 ---------- */
 function gsearch(q){
-  const box=$('gres');box.innerHTML='';q=q.trim().toLowerCase();
+  const box=$('gres');box.innerHTML='';const raw=q.trim();q=raw.toLowerCase();
   if(!q){box.style.display='none';return;}
   const out=[];const push=(bd,txt,sub,go)=>{if(out.length<40)out.push(h('div',{class:'it',onmousedown:e=>{e.preventDefault();box.style.display='none';$('gq').value='';go();}},bd,h('span',{class:'mono',text:txt}),h('span',{style:'color:var(--mute);margin-left:auto;font-size:11px',text:sub})));};
+  push(h('span',{class:'bd etc',text:'찾기'}),'소스 전체에서 "'+raw+'" 문자열 찾기','Enter',()=>openSearch(raw));
   for(const e of DB.entries)if(e.url.toLowerCase().includes(q))push(badge(e.m.cls.layer),e.url,'URL',()=>select({t:'m',m:e.m}));
   for(const c of DB.classes)if((c.simple+' '+(c.sum||'')).toLowerCase().includes(q))push(badge(c.layer),c.simple,(c.sum?c.sum+' · ':'')+'클래스',()=>select({t:'c',cls:c}));
   for(const t of DB.tables.values())if(t.name.toLowerCase().includes(q))push(badge('table'),t.name,'테이블',()=>select({t:'table',tb:t}));
@@ -1199,6 +1358,8 @@ function gsearch(q){
 $('btnOpen').onclick=$('btnOpen2').onclick=()=>$('dir').click();
 $('dir').onchange=e=>{if(e.target.files.length){showWelcome();fromInput(e.target.files).catch(err=>progress(0,'오류: '+err.message));}e.target.value='';};
 $('sq').oninput=renderSide;
+$('btnFind').onclick=()=>openSearch(S.sel&&S.sel.t==='q'?S.sel.o.q:'');
+document.addEventListener('keydown',e=>{if(DB&&(e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='F'||e.key==='f')){e.preventDefault();openSearch('');}});
 $('gq').oninput=e=>gsearch(e.target.value);
 $('gq').onblur=()=>setTimeout(()=>$('gres').style.display='none',150);
 $('gq').onkeydown=e=>{if(e.key==='Enter'){const f=$('gres').querySelector('.it');if(f)f.dispatchEvent(new MouseEvent('mousedown'));}if(e.key==='Escape')e.target.blur();};
@@ -1255,8 +1416,8 @@ import com.bank.core.transfer.vo.TransferVO;
 
 public interface TransferService {
     /**
-     * 계좌이체를 실행한다.
-     * 계좌상태 확인 → 일일한도 검증 → 수수료 계산 → 출금/입금 → 이력 기록 순으로 처리한다.
+     * @name_ko 계좌이체 실행
+     * @desc 계좌상태 확인 → 일일한도 검증 → 수수료 계산 → 출금/입금 → 이력 기록 순으로 처리한다.
      * @param vo 이체 요청 정보
      * @return 결과코드 (0000: 정상, E101: 계좌상태 오류, E201: 한도초과, E301: 잔액부족)
      */
@@ -1279,6 +1440,13 @@ import com.bank.core.transfer.dao.TransferHistoryDAO;
 import com.bank.core.transfer.service.TransferService;
 import com.bank.core.transfer.vo.TransferVO;
 
+/**
+ * <pre>
+ * 계좌이체 서비스 구현
+ * 당행 이체 처리, 수수료 계산, 이체 이력 기록을 담당한다.
+ * </pre>
+ * @author core-team
+ */
 @Service("transferService")
 public class TransferServiceImpl implements TransferService {
 
