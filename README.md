@@ -31,6 +31,7 @@
 - URL 매핑: `@RequestMapping`, `SimpleUrlHandlerMapping`·`BeanNameUrlHandlerMapping`(XML), Struts 1/2 설정
 - 의존성 주입: Spring XML `<property ref>`(setter 주입), `@Resource(name)`, `@Qualifier`, 타입 기준(인터페이스 → 구현체)
 - SQL: Anyframe Query 매핑 XML, iBATIS `sqlMap`, MyBatis `mapper`, Java 소스 내 문자열 SQL(추정)
+- VO 필드 주석: 필드 위 주석과 같은 줄 끝 주석(`private String acctNo; // 계좌번호`)을 클래스 화면의 필드 표와 메서드 상세의 "다루는 VO"에 표시, 필드명·주석으로 검색 가능
 - 주석: 클래스·메서드 위 Javadoc/`//` 주석, 메서드 본문 주석, SQL XML의 `<!-- -->` 주석을 흐름·로직 개요·상세에 함께 표시하고 주석 내용으로 검색 가능. 구현 클래스에 주석이 없으면 인터페이스의 주석을 가져옴
 - SQL ID가 상수나 `"a" + "b"` 결합으로 전달되는 경우도 해석
 

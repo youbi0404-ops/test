@@ -133,6 +133,15 @@ pre.src .l.hl{background:var(--accent-bg)}
 pre.sql{margin:0;padding:10px 12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word}
 .empty{color:var(--mute);padding:24px;text-align:center}
 .doc{color:var(--code-cm);font-family:var(--sans);font-size:12px}
+.ft{width:100%;border-collapse:collapse;font-size:12px}
+.ft td{padding:2px 8px 2px 0;vertical-align:top;border-bottom:1px solid var(--line)}
+.ft td.n{font-family:var(--mono);white-space:nowrap}
+.ft td.t{font-family:var(--mono);color:var(--mute);white-space:nowrap}
+.ft td.d{color:var(--text);word-break:break-word}
+.ft tr:last-child td{border-bottom:0}
+.vo{margin-top:8px}
+.vo summary{cursor:pointer;font:600 12px var(--mono);padding:2px 0}
+.vo .scroll{max-height:220px;overflow:auto;margin-top:4px}
 .lc{color:var(--code-cm);font-size:12.5px;padding:4px 0 0}
 .docbox{white-space:pre-wrap;word-break:break-word;border-left:3px solid var(--code-cm);padding:5px 9px;margin-top:7px;background:var(--panel2);font-size:12.5px;max-height:200px;overflow:auto}
 .note{color:var(--mute);font-size:12px;margin:0 0 10px}
@@ -145,7 +154,7 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
   <h1>Java Flow Explorer</h1>
   <span id="proj"></span>
   <div class="searchwrap hide" id="swrap">
-    <input type="text" id="gq" placeholder="통합 검색: 클래스 · 메서드 · URL · SQL · 테이블 · 주석 내용  ( / 키)" autocomplete="off">
+    <input type="text" id="gq" placeholder="통합 검색: 클래스 · 메서드 · 필드 · URL · SQL · 테이블 · 주석 내용  ( / 키)" autocomplete="off">
     <div id="gres"></div>
   </div>
   <span class="sp"></span>
@@ -341,6 +350,12 @@ function parseJava(path,src){
     let st=k;while(CM[st].ln&&st>0&&CM[st-1].ln&&own(CM[st-1])&&src.slice(CM[st-1].b,CM[st].a).trim()==='')st--;
     return makeDoc(CM.slice(st,k+1).map(c=>c.text).join('\n'),CM[st].l);
   }
+  function trailAt(ti){
+    const z=T[ti].b;let lo=0,hi=CM.length-1,k=-1;
+    while(lo<=hi){const mid=(lo+hi)>>1;if(CM[mid].a>=z){k=mid;hi=mid-1;}else lo=mid+1;}
+    if(k<0||CM[k].l!==T[ti].l||(ti+1<N&&T[ti+1].a<CM[k].a))return null;
+    return makeDoc(CM[k].text,CM[k].l);
+  }
   const file={path,pkg:'',imports:[],wild:[],classes:[]};
   const O=(i,v)=>tO(T,i,v),I=(i,v)=>tI(T,i,v);
   function qn(){let s='';while(p<N&&(T[p].t==='i'||O(p,'.')||O(p,'*'))){s+=T[p].v;p++;}return s;}
@@ -404,6 +419,7 @@ function parseJava(path,src){
         if(found==='='){let q=k+1,s='',ok=true,ex=true;for(;q<end&&!O(q,';')&&!O(q,',');q++){const t=T[q];if(ex&&t.t==='s'){s+=t.v;ex=false;}else if(!ex&&t.t==='o'&&t.v==='+')ex=true;else{ok=false;break;}}if(ok&&!ex)f.constStr=s;}
         cls.fields[nameTok.v]=f;p=k;
         while(p<end){if(O(p,'(')||O(p,'{')||O(p,'[')){p=mt(T,p,end+1)+1;continue;}if(O(p,';')){p++;break;}if(O(p,',')&&I(p+1)&&(O(p+2,',')||O(p+2,';')||O(p+2,'=')))cls.fields[T[p+1].v]={type:f.type,annos:f.annos,line:T[p+1].l};p++;}
+        {const dc=docAt(start)||trailAt(p-1);if(dc){f.doc=dc.text;f.sum=dc.sum;}}
       }
     }
   }
@@ -609,7 +625,7 @@ function buildModel(){
     for(const an of ['Service','Component','Repository','Controller','RestController']){const a=annoOf(c.annos,an);if(a){const nm=(a.args.value&&a.args.value.strs[0])||decap(c.simple);if(!db.beans.has(nm))db.beans.set(nm,c.fqn);}}
   }
   for(const c of db.classes)for(const p of parentsOf(c))p.subs.push(c);
-  for(const c of db.classes)for(const m of c.methods){if(m.doc)continue;for(const p of parentsOf(c)){const pm=findMethod(p,m.name,m.params.length);if(pm&&pm.doc){m.doc=pm.doc;m.sum=pm.sum;m.docFrom=pm.cls.simple;break;}}}
+  for(const c of db.classes)for(const m of c.methods){if(m.doc)continue;if(m.acc){const fn=decap(m.name.replace(/^(get|set|is)/,'')),f=c.fields[fn];if(f&&f.sum){m.doc=f.doc;m.sum=f.sum;m.docFrom='필드 '+fn;continue;}}for(const p of parentsOf(c)){const pm=findMethod(p,m.name,m.params.length);if(pm&&pm.doc){m.doc=pm.doc;m.sum=pm.sum;m.docFrom=pm.cls.simple;break;}}}
   // SQL 인덱스
   db.sqlIndex=new Map();
   const idx=(k,q)=>{if(!db.sqlIndex.has(k))db.sqlIndex.set(k,[]);db.sqlIndex.get(k).push(q);};
@@ -1057,6 +1073,19 @@ function renderLogic(view,m){
   view.appendChild(h('p',{class:'note',text:mSig(m)+'  —  색 막대: 파랑=조건, 초록=반복, 주황=예외처리. 칩을 클릭하면 호출 대상 소스를 볼 수 있습니다.'}));
   view.appendChild(box);
 }
+/* ---------- 필드 표 ---------- */
+function fieldTable(c){
+  const tb=h('table',{class:'ft'});
+  for(const fn in c.fields){const f=c.fields[fn];
+    tb.appendChild(h('tr',null,h('td',{class:'n',text:fn}),h('td',{class:'t',text:lastSeg(f.type)||''}),
+      h('td',{class:'d',title:f.doc||''},f.sum||'',f.constStr!==undefined?h('span',{class:'tag',style:'margin-left:6px',text:'= "'+(f.constStr.length>40?f.constStr.slice(0,38)+'…':f.constStr)+'"'}):null)));}
+  return tb;
+}
+function relatedVOs(m){
+  const names=m.params.map(p=>p.type).concat([m.ret],Object.keys(m.locals).map(k=>m.locals[k])),out=[];
+  for(const n of names){if(!n)continue;const c=resolveType(n,m.cls);if(c&&c.layer==='model'&&!out.includes(c)&&Object.keys(c.fields).length)out.push(c);if(out.length>=5)break;}
+  return out;
+}
 /* ---------- 클래스 구조 ---------- */
 function renderClass(view,c){
   const b1=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'기본 정보'}));
@@ -1070,6 +1099,8 @@ function renderClass(view,c){
   const deps=[];for(const fn in c.fields){const fi=fieldInfo(c,fn);if(fi&&fi.cls&&fi.cls.layer!=='model')deps.push([fn,fi.cls,c.fields[fn].type]);}
   if(deps.length){const b=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'주입받는 의존 객체 (필드)'}));
     for(const [fn,t,decl] of deps)b.appendChild(h('div',{class:'rk',onclick:()=>select({t:'c',cls:t})},badge(t.layer),h('span',{class:'nm',text:fn+' : '+lastSeg(decl)+(t.simple!==lastSeg(decl)?'  →  실제 '+t.simple:'')})));view.appendChild(b);}
+  const nf=Object.keys(c.fields).length;
+  if(nf){const b=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'필드 '+nf+'개'+(c.layer==='model'?' (항목 정의)':'')}));b.appendChild(fieldTable(c));if(c.layer==='model')view.insertBefore(b,view.children[1]||null);else view.appendChild(b);}
   const b3=h('div',{class:'box'},h('h3',{text:'메서드 '+c.methods.length+'개'}));
   for(const m of c.methods)b3.appendChild(h('div',{class:'rk',onclick:()=>select({t:'m',m})},h('span',{class:'nm'},mSig(m),m.sum?h('span',{class:'doc',text:'  — '+m.sum}):null),m.entries[0]?h('span',{class:'tag url',text:m.entries[0].url}):null,h('span',{class:'v',text:'호출 '+m.out.length+' · 피호출 '+m.inn.length})));
   view.appendChild(b3);
@@ -1130,6 +1161,8 @@ function focusDetail(it){
       h('button',{onclick:()=>{select({t:'m',m});S.tab='logic';render();}},'로직 개요'),
       h('button',{onclick:()=>{select({t:'m',m});S.tab='rev';render();}},'역추적'),
       h('button',{onclick:()=>select({t:'c',cls:m.cls})},'클래스 보기')));
+    {const vos=relatedVOs(m);if(vos.length){const d=h('div',{style:'margin-top:8px'},h('div',{class:'kv',text:'이 메서드가 다루는 VO (펼치면 항목과 주석 표시)'}));
+      vos.forEach((c,i)=>{const det=h('details',Object.assign({class:'vo'},vos.length===1?{open:''}:{}),h('summary',null,badge(c.layer),' '+c.simple+(c.sum?'  — '+c.sum:'')),h('div',{class:'scroll'},fieldTable(c)));d.appendChild(det);});sec.appendChild(d);}}
     box.appendChild(sec);
     box.appendChild(srcBlock(m.cls.file,m.dl||m.sl,m.endLine,it.line&&it.line>=m.sl&&it.line<=m.endLine&&!it.root?it.line:0));
   }else if(it.t==='sql'){
@@ -1156,6 +1189,7 @@ function gsearch(q){
   for(const e of DB.entries)if(e.url.toLowerCase().includes(q))push(badge(e.m.cls.layer),e.url,'URL',()=>select({t:'m',m:e.m}));
   for(const c of DB.classes)if((c.simple+' '+(c.sum||'')).toLowerCase().includes(q))push(badge(c.layer),c.simple,(c.sum?c.sum+' · ':'')+'클래스',()=>select({t:'c',cls:c}));
   for(const t of DB.tables.values())if(t.name.toLowerCase().includes(q))push(badge('table'),t.name,'테이블',()=>select({t:'table',tb:t}));
+  if(q.length>=2)for(const c of DB.classes){if(out.length>=40)break;for(const fn in c.fields){const f=c.fields[fn];if((fn+' '+(f.sum||'')).toLowerCase().includes(q))push(badge(c.layer),c.simple+'.'+fn,(f.sum?f.sum+' · ':'')+'필드',()=>select({t:'c',cls:c}));}}
   for(const s of DB.sqls)if(out.length<40&&(s.sid+' '+(s.sum||'')).toLowerCase().includes(q))push(badge('sql'),s.sid,(s.sum?s.sum+' · ':'')+'SQL',()=>select({t:'sql',sql:s}));
   for(const m of DB.methods){if(out.length>=40)break;if(!m.acc&&!m.docFrom&&(m.cls.simple+'.'+m.name+' '+(m.sum||'')).toLowerCase().includes(q)||(!m.acc&&m.docFrom&&(m.cls.simple+'.'+m.name+' '+m.sum).toLowerCase().includes(q)&&!m.abstract))push(badge(m.cls.layer),mLabel(m),(m.sum?m.sum+' · ':'')+'메서드',()=>select({t:'m',m}));}
   if(!out.length)box.appendChild(h('div',{class:'it',style:'color:var(--mute)',text:'결과 없음'}));else out.forEach(x=>box.appendChild(x));
@@ -1248,7 +1282,7 @@ import com.bank.core.transfer.vo.TransferVO;
 @Service("transferService")
 public class TransferServiceImpl implements TransferService {
 
-    private static final long FEE_FREE_AMOUNT = 1000000L;
+    private static final long FEE_FREE_AMOUNT = 1000000L; // 수수료 면제 기준금액
 
     @Resource(name = "accountDAO")
     private AccountDAO accountDAO;
@@ -1344,9 +1378,11 @@ public class TransferHistoryDAO {
 `,
 'sample-bank-core/src/main/java/com/bank/core/transfer/vo/TransferVO.java':String.raw`package com.bank.core.transfer.vo;
 
+/** 계좌이체 요청 정보 */
 public class TransferVO {
-    private String fromAcctNo;
-    private String toAcctNo;
+    private String fromAcctNo; // 출금계좌번호
+    private String toAcctNo;   // 입금계좌번호
+    /** 이체금액 (원) */
     private long amount;
 
     public String getFromAcctNo() { return fromAcctNo; }
@@ -1436,10 +1472,12 @@ public class AccountDAO extends AbstractDAO {
 `,
 'sample-bank-core/src/main/java/com/bank/core/account/vo/AccountVO.java':String.raw`package com.bank.core.account.vo;
 
+/** 계좌 기본 정보 */
 public class AccountVO {
-    private String acctNo;
-    private String status;
-    private long balance;
+    private String acctNo;  // 계좌번호
+    private String status;  // 계좌상태 (01: 정상, 02: 거래정지, 99: 해지)
+    private long balance;   // 현재 잔액
+
 
     public String getAcctNo() { return acctNo; }
     public String getStatus() { return status; }
