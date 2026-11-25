@@ -130,6 +130,9 @@ pre.src .l.hl{background:var(--accent-bg)}
 .kw{color:var(--code-kw)} .st{color:var(--code-str)} .cm{color:var(--code-cm)}
 pre.sql{margin:0;padding:10px 12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word}
 .empty{color:var(--mute);padding:24px;text-align:center}
+.doc{color:var(--code-cm);font-family:var(--sans);font-size:12px}
+.lc{color:var(--code-cm);font-size:12.5px;padding:4px 0 0}
+.docbox{white-space:pre-wrap;word-break:break-word;border-left:3px solid var(--code-cm);padding:5px 9px;margin-top:7px;background:var(--panel2);font-size:12.5px;max-height:200px;overflow:auto}
 .note{color:var(--mute);font-size:12px;margin:0 0 10px}
 svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
 .hide{display:none!important}
@@ -140,7 +143,7 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
   <h1>Java Flow Explorer</h1>
   <span id="proj"></span>
   <div class="searchwrap hide" id="swrap">
-    <input type="text" id="gq" placeholder="통합 검색: 클래스 · 메서드 · URL · SQL ID · 테이블  ( / 키)" autocomplete="off">
+    <input type="text" id="gq" placeholder="통합 검색: 클래스 · 메서드 · URL · SQL · 테이블 · 주석 내용  ( / 키)" autocomplete="off">
     <div id="gres"></div>
   </div>
   <span class="sp"></span>
@@ -164,6 +167,7 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
     <ul>
       <li>모든 분석은 이 브라우저 안에서만 수행됩니다. 네트워크 통신이 전혀 없으며 소스가 PC 밖으로 나가지 않습니다.</li>
       <li>브라우저가 "파일 N개를 업로드하시겠습니까?"라고 묻는 것은 로컬 파일 읽기 허용 확인이며 실제 전송은 없습니다.</li>
+      <li>메서드·클래스 위의 주석(Javadoc)과 본문 주석, SQL XML 주석을 흐름에 함께 표시하고 주석 내용으로도 검색됩니다.</li>
       <li>.java / .xml 파일을 읽어 URL → Controller → Service → DAO → SQL → 테이블 흐름을 구성합니다.</li>
       <li>Spring XML 빈 설정, Anyframe Query 매핑, iBATIS/MyBatis SQL 맵, Struts 설정, 소스 내 인라인 SQL을 인식합니다.</li>
     </ul>
@@ -196,15 +200,22 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
  * ===================================================================== */
 function isIdStart(c){return (c>=65&&c<=90)||(c>=97&&c<=122)||c===95||c===36||c>127;}
 function isIdPart(c){return isIdStart(c)||(c>=48&&c<=57);}
-function tokenize(src,base,line0){
+function makeDoc(raw,l){
+  const lines=raw.split('\n').map(x=>x.replace(/\r/g,'').replace(/\*+\/\s*$/,'').replace(/^\s*(\/\*+|\*+|\/\/+)?\s?/,'').replace(/\s+$/,'')).filter(x=>!/^[\s\-=*#~_+.]*$/.test(x));
+  if(!lines.length)return null;
+  let sum='';for(const x of lines){const y=x.replace(/<[^>]+>/g,'').trim();if(!y||y[0]==='@')continue;sum=y;break;}
+  if(sum.length>90)sum=sum.slice(0,88)+'…';
+  return {text:lines.join('\n'),sum,l};
+}
+function tokenize(src,base,line0,cm){
   base=base||0; const toks=[]; let i=0,line=line0||1; const n=src.length;
   while(i<n){
     const c=src.charCodeAt(i);
     if(c===10){line++;i++;continue;}
     if(c<=32){i++;continue;}
     const ch=src[i];
-    if(ch==='/'&&src[i+1]==='/'){const e=src.indexOf('\n',i);i=e<0?n:e;continue;}
-    if(ch==='/'&&src[i+1]==='*'){let e=src.indexOf('*/',i+2);if(e<0)e=n;for(let k=i;k<e;k++)if(src.charCodeAt(k)===10)line++;i=e+2;continue;}
+    if(ch==='/'&&src[i+1]==='/'){const e=src.indexOf('\n',i),z=e<0?n:e;if(cm)cm.push({a:base+i,b:base+z,l:line,ln:true,text:src.slice(i,z)});i=z;continue;}
+    if(ch==='/'&&src[i+1]==='*'){let e=src.indexOf('*/',i+2);if(e<0)e=n;if(cm)cm.push({a:base+i,b:base+Math.min(n,e+2),l:line,text:src.slice(i,e+2)});for(let k=i;k<e;k++)if(src.charCodeAt(k)===10)line++;i=e+2;continue;}
     if(ch==='"'){let j=i+1,s='';while(j<n&&src[j]!=='"'&&src[j]!=='\n'){if(src[j]==='\\'){const x=src[j+1];s+=x==='n'?'\n':x==='t'?'\t':x==='r'?'':(x||'');j+=2;}else s+=src[j++];}
       toks.push({t:'s',v:s,l:line,a:base+i,b:base+j+1});i=j+1;continue;}
     if(ch==="'"){let j=i+1;while(j<n&&src[j]!=="'"&&src[j]!=='\n'){if(src[j]==='\\')j++;j++;}toks.push({t:'c',v:"'",l:line,a:base+i,b:base+j+1});i=j+1;continue;}
@@ -318,7 +329,16 @@ function scanInlineSql(T,a,b){
 }
 
 function parseJava(path,src){
-  const T=tokenize(src),N=T.length;let p=0;
+  const CM=[];const T=tokenize(src,0,1,CM),N=T.length;let p=0;
+  function docAt(ti){
+    const A=T[ti].a;let lo=0,hi=CM.length-1,k=-1;
+    while(lo<=hi){const mid=(lo+hi)>>1;if(CM[mid].b<=A){k=mid;lo=mid+1;}else hi=mid-1;}
+    if(k<0||src.slice(CM[k].b,A).trim()!=='')return null;
+    const own=c=>src.slice(src.lastIndexOf('\n',c.a-1)+1,c.a).trim()==='';
+    if(!own(CM[k]))return null;
+    let st=k;while(CM[st].ln&&st>0&&CM[st-1].ln&&own(CM[st-1])&&src.slice(CM[st-1].b,CM[st].a).trim()==='')st--;
+    return makeDoc(CM.slice(st,k+1).map(c=>c.text).join('\n'),CM[st].l);
+  }
   const file={path,pkg:'',imports:[],wild:[],classes:[]};
   const O=(i,v)=>tO(T,i,v),I=(i,v)=>tI(T,i,v);
   function qn(){let s='';while(p<N&&(T[p].t==='i'||O(p,'.')||O(p,'*'))){s+=T[p].v;p++;}return s;}
@@ -332,6 +352,7 @@ function parseJava(path,src){
     let kind;if(O(p,'@')){p+=2;kind='annotation';}else{kind=T[p].v;p++;}
     if(!I(p))return null;const nt=T[p++];
     const cls={simple:nt.v,name:(outer?outer.name+'.':'')+nt.v,kind,annos:m.annos,mods:m.ms,ext:[],impl:[],fields:{},methods:[],line:nt.l,file:path,pkg:file.pkg,f:file};
+    if(startTok!==undefined){const dc=docAt(startTok);if(dc){cls.doc=dc.text;cls.sum=dc.sum;}}
     if(O(p,'<')){const k=skipAngle(T,p);if(k>0)p=k;}
     let guard=0;
     while(p<N&&!O(p,'{')&&guard++<200){
@@ -351,7 +372,7 @@ function parseJava(path,src){
       if(O(p,';')){p++;continue;}
       const start=p,m=mods();
       if(O(p,'{')){p=mt(T,p,end+1)+1;continue;}
-      if(isTypeKw(p)){const save=p;if(!parseType(m,cls)){p=save+1;}continue;}
+      if(isTypeKw(p)){const save=p;if(!parseType(m,cls,start)){p=save+1;}continue;}
       if(O(p,'<')){const s=skipAngle(T,p);if(s>0)p=s;}
       let k=p,ad=0,found=null;
       for(;k<end;k++){const t=T[k];if(t.t!=='o')continue;const v=t.v;
@@ -370,6 +391,7 @@ function parseJava(path,src){
           if(t.t==='o'){if('(<[{'.includes(t.v))d++;else if(')>]}'.includes(t.v))d--;}
         }
         const me={name:nameTok.v,ret:typeAt(p,k-1),params,mods:m.ms,annos:m.annos,line:nameTok.l,sl:T[start].l,endLine:nameTok.l,raw:[],locals:{},inline:[],abstract:true,ctor:k-1===p,cls};
+        {const dc=docAt(start);if(dc){me.doc=dc.text;me.sum=dc.sum;me.dl=dc.l;}}
         p=pe+1;while(p<end&&!O(p,'{')&&!O(p,';'))p++;
         if(O(p,'{')){const be=mt(T,p,end+1);me.abstract=false;me.bodyA=T[p].a;me.bodyB=T[be].b;me.bl=T[p].l;me.endLine=T[be].l;
           me.raw=extractCalls(T,p+1,be);me.locals=scanLocals(T,p+1,be);me.inline=scanInlineSql(T,p+1,be);p=be+1;}
@@ -387,7 +409,7 @@ function parseJava(path,src){
     if(I(p,'package')){p++;file.pkg=qn();continue;}
     if(I(p,'import')){p++;if(I(p,'static')){p++;qn();continue;}const q=qn();if(q.endsWith('.*'))file.wild.push(q.slice(0,-2));else file.imports.push(q);continue;}
     const save=p,m=mods();
-    if(isTypeKw(p)){if(!parseType(m,null))p=Math.max(p,save+1);}else p=Math.max(p,save)+1;
+    if(isTypeKw(p)){if(!parseType(m,null,save))p=Math.max(p,save+1);}else p=Math.max(p,save)+1;
   }
   return file;
 }
@@ -429,8 +451,8 @@ function parseXml(path,text,db){
   const root=doc.documentElement,rn=(root.localName||'').toLowerCase();
   const els=n=>Array.from(doc.getElementsByTagNameNS('*',n));
   const kids=(el,n)=>Array.from(el.children).filter(c=>c.localName===n);
-  const addSql=(sid,ns,txt,tag)=>{if(!sid)return;const info=sqlInfo(txt);
-    db.sqls.push({key:path+'#'+sid,sid,ns:ns||'',file:path,line:lineOf(text,'id="'+sid+'"'),text:txt.replace(/^\s*\n/,'').replace(/\s+$/,''),type:info.type==='?'&&tag?({select:'R',insert:'C',update:'U',delete:'D',procedure:'P'}[tag]||'?'):info.type,tables:info.tables,kind:'xml',callers:[]});};
+  const addSql=(sid,ns,txt,tag,el)=>{if(!sid)return;const info=sqlInfo(txt);let sum='';if(el){let pv=el.previousSibling;while(pv&&pv.nodeType===3&&!pv.nodeValue.trim())pv=pv.previousSibling;if(pv&&pv.nodeType===8)sum=(pv.nodeValue.trim().split('\n')[0]||'').trim();}
+    db.sqls.push({key:path+'#'+sid,sid,ns:ns||'',file:path,line:lineOf(text,'id="'+sid+'"'),text:txt.replace(/^\s*\n/,'').replace(/\s+$/,''),type:info.type==='?'&&tag?({select:'R',insert:'C',update:'U',delete:'D',procedure:'P'}[tag]||'?'):info.type,tables:info.tables,kind:'xml',sum,callers:[]});};
   if(rn==='beans'){
     for(const b of els('bean')){
       const cls=b.getAttribute('class');if(!cls)continue;
@@ -453,14 +475,14 @@ function parseXml(path,text,db){
   }
   if(rn==='struts-config'){for(const a of els('action')){const u=a.getAttribute('path'),c=a.getAttribute('type');if(u&&c)db.urlMaps.push({url:u+'.do',cls:c});}return true;}
   if(rn==='struts'){for(const a of els('action')){const u=a.getAttribute('name'),c=a.getAttribute('class');if(u&&c)db.urlMaps.push({url:'/'+u+'.action',cls:c,method:a.getAttribute('method')||'execute'});}return true;}
-  if(rn==='queryservice'){for(const q of els('query')){const st=q.getElementsByTagNameNS('*','statement')[0];if(st)addSql(q.getAttribute('id'),'',st.textContent);}return true;}
+  if(rn==='queryservice'){for(const q of els('query')){const st=q.getElementsByTagNameNS('*','statement')[0];if(st)addSql(q.getAttribute('id'),'',st.textContent,null,q);}return true;}
   if(rn==='sqlmap'||rn==='mapper'){
     const ns=root.getAttribute('namespace')||'';const frag={};
     for(const f of els('sql'))frag[f.getAttribute('id')]=f;
     const collect=(el,depth)=>{let s='';for(const c of el.childNodes){if(c.nodeType===3||c.nodeType===4)s+=c.nodeValue;else if(c.nodeType===1){
         if(c.localName==='include'){const r=(c.getAttribute('refid')||'').replace(ns+'.','');if(frag[r]&&depth<5)s+=' '+collect(frag[r],depth+1)+' ';}
         else if(c.localName!=='selectKey')s+=' '+collect(c,depth)+' ';}}return s;};
-    for(const tag of ['select','insert','update','delete','statement','procedure'])for(const e of els(tag))addSql(e.getAttribute('id'),ns,collect(e,0),tag);
+    for(const tag of ['select','insert','update','delete','statement','procedure'])for(const e of els(tag))addSql(e.getAttribute('id'),ns,collect(e,0),tag,e);
     return true;
   }
   return false;
@@ -585,6 +607,7 @@ function buildModel(){
     for(const an of ['Service','Component','Repository','Controller','RestController']){const a=annoOf(c.annos,an);if(a){const nm=(a.args.value&&a.args.value.strs[0])||decap(c.simple);if(!db.beans.has(nm))db.beans.set(nm,c.fqn);}}
   }
   for(const c of db.classes)for(const p of parentsOf(c))p.subs.push(c);
+  for(const c of db.classes)for(const m of c.methods){if(m.doc)continue;for(const p of parentsOf(c)){const pm=findMethod(p,m.name,m.params.length);if(pm&&pm.doc){m.doc=pm.doc;m.sum=pm.sum;m.docFrom=pm.cls.simple;break;}}}
   // SQL 인덱스
   db.sqlIndex=new Map();
   const idx=(k,q)=>{if(!db.sqlIndex.has(k))db.sqlIndex.set(k,[]);db.sqlIndex.get(k).push(q);};
@@ -701,7 +724,8 @@ const badge=(layer,txt)=>h('span',{class:'bd '+layer,title:LAYER[layer][1],text:
 const mLabel=m=>m.cls.simple+'.'+m.name+'()';
 const mSig=m=>(m.ret?m.ret+' ':'')+m.name+'('+m.params.map(p=>lastSeg(p.type)+' '+p.name).join(', ')+')';
 const CRUD={R:'조회',C:'등록',U:'수정',D:'삭제',M:'병합',P:'프로시저','?':'기타'};
-const S={sel:null,tab:'flow',stab:'entry',hist:[],depth:4,hideAcc:true,hideUtil:false,showAll:false,focusEl:null};
+const S={sel:null,tab:'flow',stab:'entry',hist:[],depth:4,hideAcc:true,hideUtil:false,showAll:false,showDoc:true,focusEl:null};
+const docSpan=x=>x&&S.showDoc?h('span',{class:'doc',text:'— '+x,title:x}):null;
 
 function showWelcome(busy){$('welcome').classList.remove('hide');$('app').classList.add('hide');}
 function startUI(){
@@ -723,25 +747,25 @@ function renderSide(){
   const add=(el)=>{total++;if(n<LIM){box.appendChild(el);n++;}};
   const hit=s=>!q||s.toLowerCase().includes(q);
   if(S.stab==='entry'){
-    for(const e of DB.entries){if(!hit(e.url+' '+mLabel(e.m)))continue;
+    for(const e of DB.entries){if(!hit(e.url+' '+mLabel(e.m)+' '+(e.m.sum||'')))continue;
       add(h('div',{class:'li'+(S.sel&&S.sel.m===e.m?' on':''),onclick:()=>select({t:'m',m:e.m})},
         h('div',{class:'t1'},badge(e.m.cls.layer),e.http?h('span',{class:'tag',text:e.http}):null,h('span',{text:e.url,title:e.url})),
-        h('div',{class:'t2',text:mLabel(e.m)+'  ·  '+e.kind})));}
+        h('div',{class:'t2',text:(e.m.sum?e.m.sum+'  ·  ':'')+mLabel(e.m)+'  ·  '+e.kind})));}
   }else if(S.stab==='class'){
     const order={controller:0,service:1,dao:2,etc:3,util:4,model:5};
-    const list=DB.classes.filter(c=>hit(c.fqn)).sort((a,b)=>order[a.layer]-order[b.layer]||(a.simple<b.simple?-1:1));
+    const list=DB.classes.filter(c=>hit(c.fqn+' '+(c.sum||''))).sort((a,b)=>order[a.layer]-order[b.layer]||(a.simple<b.simple?-1:1));
     for(const c of list){
       const open=S.openCls===c;
       add(h('div',{class:'li'+(S.sel&&S.sel.cls===c?' on':''),onclick:()=>{S.openCls=open?null:c;select({t:'c',cls:c});}},
         h('div',{class:'t1'},badge(c.layer),h('span',{text:c.simple}),h('span',{class:'tag',text:c.kind==='interface'?'interface':c.methods.length+' 메서드'})),
-        h('div',{class:'t2',text:c.pkg})));
-      if(open)for(const m of c.methods)add(h('div',{class:'li sub'+(S.sel&&S.sel.m===m?' on':''),onclick:()=>select({t:'m',m})},h('div',{class:'t1'},h('span',{text:m.name+'()'}),h('span',{class:'tag',text:'L'+m.line}))));
+        h('div',{class:'t2',text:(c.sum?c.sum+'  ·  ':'')+c.pkg})));
+      if(open)for(const m of c.methods)add(h('div',{class:'li sub'+(S.sel&&S.sel.m===m?' on':''),onclick:()=>select({t:'m',m})},h('div',{class:'t1'},h('span',{text:m.name+'()'}),h('span',{class:'tag',text:'L'+m.line})),m.sum?h('div',{class:'t2',text:m.sum}):null));
     }
   }else if(S.stab==='sql'){
-    for(const s of DB.sqls){if(!hit(s.sid+' '+s.ns+' '+s.tables.map(t=>t.name).join(' ')))continue;
+    for(const s of DB.sqls){if(!hit(s.sid+' '+s.ns+' '+(s.sum||'')+' '+s.tables.map(t=>t.name).join(' ')))continue;
       add(h('div',{class:'li'+(S.sel&&S.sel.sql===s?' on':''),onclick:()=>select({t:'sql',sql:s})},
         h('div',{class:'t1'},badge('sql'),h('span',{text:s.sid,title:s.sid}),s.callers.length?null:h('span',{class:'tag warn',text:'미사용?'})),
-        h('div',{class:'t2',text:s.tables.map(t=>t.name).join(', ')||s.file})));}
+        h('div',{class:'t2',text:(s.sum?s.sum+'  ·  ':'')+(s.tables.map(t=>t.name).join(', ')||s.file)})));}
   }else{
     const list=[...DB.tables.values()].sort((a,b)=>a.name<b.name?-1:1);
     for(const t of list){if(!hit(t.name))continue;
@@ -773,7 +797,7 @@ function render(){
   head.appendChild(h('button',{onclick:back,title:'뒤로'},'←'));
   head.appendChild(h('button',{onclick:()=>{S.hist=[];select(null,true);},title:'요약으로'},'요약'));
   if(sel.t==='m'){const m=sel.m;head.appendChild(badge(m.cls.layer));head.appendChild(h('span',{class:'ttl',text:mLabel(m)}));
-    head.appendChild(h('span',{class:'sub',text:m.entries.map(e=>e.url).join(', ')||m.cls.pkg}));}
+    head.appendChild(h('span',{class:'sub',text:[m.sum,m.entries.map(e=>e.url).join(', ')||m.cls.pkg].filter(Boolean).join('  ·  ')}));}
   else if(sel.t==='sql'){head.appendChild(badge('sql'));head.appendChild(h('span',{class:'ttl',text:sel.sql.sid}));head.appendChild(h('span',{class:'sub',text:sel.sql.file}));}
   else if(sel.t==='table'){head.appendChild(badge('table'));head.appendChild(h('span',{class:'ttl',text:sel.tb.name}));head.appendChild(h('span',{class:'sub',text:'이 테이블을 사용하는 SQL과 화면(URL)'}));}
   else{head.appendChild(badge(sel.cls.layer));head.appendChild(h('span',{class:'ttl',text:sel.cls.simple}));head.appendChild(h('span',{class:'sub',text:sel.cls.fqn}));}
@@ -783,10 +807,10 @@ function render(){
   tool.classList.remove('hide');
   const chk=(key,label)=>h('label',null,h('input',Object.assign({type:'checkbox',onchange:e=>{S[key]=e.target.checked;render();}},S[key]?{checked:''}:{})),label);
   const depthSel=()=>{const s=h('select',{onchange:e=>{S.depth=+e.target.value;render();}});for(const d of [1,2,3,4,6,8,12])s.appendChild(h('option',Object.assign({value:d},d===S.depth?{selected:''}:{}),d+'단계'));return h('label',null,'펼침 깊이 ',s);};
-  if(S.tab==='flow'){tool.append(depthSel(),chk('hideAcc','VO·getter/setter 숨김'),chk('hideUtil','Util 숨김'),h('button',{onclick:copyTree},'텍스트로 복사'));renderFlow(view,sel.m);}
+  if(S.tab==='flow'){tool.append(depthSel(),chk('hideAcc','VO·getter/setter 숨김'),chk('hideUtil','Util 숨김'),chk('showDoc','주석 표시'),h('button',{onclick:copyTree},'텍스트로 복사'));renderFlow(view,sel.m);}
   else if(S.tab==='seq'){tool.append(depthSel(),chk('hideAcc','VO·getter/setter 숨김'),chk('hideUtil','Util 숨김'));renderSeq(view,sel.m);}
-  else if(S.tab==='logic'){tool.append(chk('showAll','모든 문장 표시'),h('span',{style:'color:var(--mute)'},'분기·반복·예외 구조와 그 안에서 일어나는 호출만 추려 보여줍니다.'));renderLogic(view,sel.m);}
-  else if(S.tab==='rev'){tool.append(depthSel());renderRev(view,sel);}
+  else if(S.tab==='logic'){tool.append(chk('showAll','모든 문장 표시'),chk('showDoc','주석 표시'),h('span',{style:'color:var(--mute)'},'분기·반복·예외 구조와 그 안에서 일어나는 호출만 추려 보여줍니다.'));renderLogic(view,sel.m);}
+  else if(S.tab==='rev'){tool.append(depthSel(),chk('showDoc','주석 표시'));renderRev(view,sel);}
   else{tool.classList.add('hide');renderClass(view,sel.cls);}
 }
 /* ---------- 트리 공통 ---------- */
@@ -820,10 +844,11 @@ function rowOf(it,dir){
     if(dir==='up'||it.root)for(const e of m.entries.slice(0,3))row.appendChild(h('span',{class:'tag url',text:(e.http?e.http+' ':'')+e.url}));
     if(it.rec)row.appendChild(h('span',{class:'tag warn',text:'↻ 재귀/순환'}));
     if(it.line&&dir==='down'&&!it.root)row.appendChild(h('span',{class:'dim',text:'L'+it.line}));
+    {const d=docSpan(m.sum);if(d)row.appendChild(d);}
     if(!it.root)row.appendChild(h('button',{class:'go',title:'이 메서드를 기준으로 보기',onclick:e=>{e.stopPropagation();select({t:'m',m});}},'→ 기준으로'));
     row.ondblclick=()=>{if(!it.root)select({t:'m',m});};
   }else if(it.t==='sql'){
-    const s=it.sql;row.append(badge('sql'),h('span',{text:s.sid}),h('span',{class:'dim',text:CRUD[s.type]+(s.kind==='inline'?' · 소스 내 SQL(추정)':'')}));
+    const s=it.sql;row.append(badge('sql'),h('span',{text:s.sid}),h('span',{class:'dim',text:CRUD[s.type]+(s.kind==='inline'?' · 소스 내 SQL(추정)':'')}),docSpan(s.sum)||'');
     if(dir==='down')for(const t of s.tables.slice(0,4))row.appendChild(h('span',{class:'tag tb',text:t.name,onclick:e=>{e.stopPropagation();select({t:'table',tb:DB.tables.get(t.name)});}}));
   }else{
     row.append(badge('table'),h('span',{text:it.tb.name}),h('span',{class:'dim',text:it.ops||''}));
@@ -863,7 +888,7 @@ function treeText(m){
   const lines=[];
   (function walk(it,ind,path){
     const k=itKey(it);
-    lines.push(ind+(it.t==='m'?'['+LAYER[it.m.cls.layer][0]+'] '+mLabel(it.m):it.t==='sql'?'[SQL:'+it.sql.type+'] '+it.sql.sid:'[TABLE] '+it.tb.name+(it.ops?' ('+it.ops+')':''))+(path.has(k)?'  (순환)':''));
+    lines.push(ind+(it.t==='m'?'['+LAYER[it.m.cls.layer][0]+'] '+mLabel(it.m):it.t==='sql'?'[SQL:'+it.sql.type+'] '+it.sql.sid:'[TABLE] '+it.tb.name+(it.ops?' ('+it.ops+')':''))+(path.has(k)?'  (순환)':'')+(S.showDoc&&it.t==='m'&&it.m.sum?'   // '+it.m.sum:S.showDoc&&it.t==='sql'&&it.sql.sum?'   // '+it.sql.sum:''));
     if(path.has(k)||path.size>=S.depth+1||lines.length>3000)return;
     const np=new Set(path);np.add(k);for(const c of kidsDown(it))walk(c,ind+'    ',np);
   })({t:'m',m},'',new Set());
@@ -936,7 +961,7 @@ function renderSeq(view,m){
     else{const a=cx(x.from),b=cx(x.to),dirn=b>a?1:-1;
       g.appendChild(s('line',{x1:a,y1:y,x2:b-dirn*2,y2:y,stroke:x.it.t==='sql'?'var(--c-sql)':'var(--text)','marker-end':'url(#ah)'}));
       const tx=s('text',{x:Math.min(a,b)+8,y:y-5},(i+1)+'. '+txt);if(x.it.t==='sql')tx.setAttribute('style','fill:var(--c-sql)');g.appendChild(tx);}
-    g.appendChild(s('title',{},x.label+(x.sub?'  ['+x.sub+']':'')));
+    {const sm=x.it.t==='m'?x.it.m.sum:x.it.sql.sum;g.appendChild(s('title',{},x.label+(x.sub?'  ['+x.sub+']':'')+(sm?'\n'+sm:'')));}
     g.addEventListener('click',()=>focusDetail(x.it));
     g.addEventListener('dblclick',()=>{if(x.it.t==='m')select({t:'m',m:x.it.m});});
     svg.appendChild(g);
@@ -948,7 +973,8 @@ function renderSeq(view,m){
 function parseStmts(T,a,b){const out=[];let p=a,g=0;while(p<b&&g++<20000){const r=parseStmt(T,p,b);if(r.node)out.push(r.node);p=Math.max(r.next,p+1);}return out;}
 function stmtEnd(T,p,b){for(let k=p;k<b;k++){const t=T[k];if(t.t!=='o')continue;if(OPEN[t.v]){k=mt(T,k,b);continue;}if(t.v===';')return k;}return b;}
 function asList(n){return !n?[]:n.k==='block'?n.body:[n];}
-function parseStmt(T,p,b){
+function parseStmt(T,p,b){const r=parseStmt0(T,p,b);if(r.node){r.node.p0=p;r.node.p1=r.next-1;}return r;}
+function parseStmt0(T,p,b){
   const t=T[p];
   if(t.t==='o'){if(t.v==='{'){const e=mt(T,p,b);return {node:{k:'block',body:parseStmts(T,p+1,e)},next:e+1};}if(t.v===';')return {node:null,next:p+1};}
   if(t.t==='i'){
@@ -977,14 +1003,14 @@ function parseStmt(T,p,b){
 }
 function renderLogic(view,m){
   if(m.abstract){view.appendChild(h('div',{class:'empty',text:'본문이 없는 메서드입니다.'}));return;}
-  const src=DB.srcs.get(m.cls.file);let T,nodes;
-  try{T=tokenize(src.slice(m.bodyA,m.bodyB),m.bodyA,m.bl);nodes=parseStmts(T,1,T.length-1);}catch(e){view.appendChild(h('div',{class:'empty',text:'로직 구조를 해석하지 못했습니다: '+e.message}));return;}
+  const src=DB.srcs.get(m.cls.file);let T,nodes;const CM=[];let ci=0;
+  try{T=tokenize(src.slice(m.bodyA,m.bodyB),m.bodyA,m.bl,CM);nodes=parseStmts(T,1,T.length-1);}catch(e){view.appendChild(h('div',{class:'empty',text:'로직 구조를 해석하지 못했습니다: '+e.message}));return;}
   const txt=(a,b)=>{if(b<=a||!T[a])return '';const s=src.slice(T[a].a,T[Math.min(b,T.length)-1].b).replace(/\s+/g,' ');return s.length>220?s.slice(0,217)+'…':s;};
   const calls=(a,b)=>{if(b<=a)return [];const out=[];for(const r of extractCalls(T,a,b+1)){const res=resolveCall(r,m);
       for(const t of res.targets){if(S.hideAcc&&!S.showAll&&(t.acc||t.cls.layer==='model'))continue;out.push({t:'m',m:t});}
       for(const q of res.sqls)out.push({t:'sql',sql:q});}return out;};
   const chips=cs=>cs.map(c=>c.t==='m'
-    ?h('span',{class:'chip',title:'클릭: 소스 보기 / 더블클릭: 이 메서드로 이동',onclick:()=>focusDetail(c),ondblclick:()=>select({t:'m',m:c.m})},badge(c.m.cls.layer),mLabel(c.m))
+    ?h('span',{class:'chip',title:(c.m.sum?c.m.sum+'\n':'')+'클릭: 소스 보기 / 더블클릭: 이 메서드로 이동',onclick:()=>focusDetail(c),ondblclick:()=>select({t:'m',m:c.m})},badge(c.m.cls.layer),mLabel(c.m))
     :h('span',{class:'chip',onclick:()=>focusDetail(c)},badge('sql'),c.sql.sid));
   // 가시성 계산
   const vis=n=>{
@@ -1001,7 +1027,8 @@ function renderLogic(view,m){
     if(n.k==='try'){const a=any(n.body);let b=false;for(const c of n.catches)if(any(c.body))b=true;const f=any(n.fin);v=v||a||b||f;}
     return n.v=v;
   };
-  const list=(l,box)=>{for(const n of l||[])if(vis(n))box.appendChild(draw(n));return box;};
+  const flushC=(box,upto)=>{while(ci<CM.length&&CM[ci].b<=upto){const c=CM[ci++];if(!S.showDoc)continue;const d=makeDoc(c.text,c.l);if(d&&!/[;{}]\s*$/.test(d.text))box.appendChild(h('div',{class:'lc',text:'// '+d.text.replace(/\n/g,' ')}));}};
+  const list=(l,box)=>{for(const n of l||[]){const a=T[n.p0],z=T[n.p1];if(a)flushC(box,a.a);if(vis(n))box.appendChild(draw(n));if(z)while(ci<CM.length&&CM[ci].a<z.b)ci++;}return box;};
   const head=(label,code,cs)=>h('div',{class:'lh'},h('b',{text:label}),code||'',chips(cs||[]));
   function draw(n){
     switch(n.k){
@@ -1023,6 +1050,7 @@ function renderLogic(view,m){
   }
   const box=h('div');list(nodes,box);
   if(!box.children.length)box.appendChild(h('div',{class:'empty',text:'표시할 분기/호출이 없습니다. "모든 문장 표시"를 켜 보세요.'}));
+  if(m.doc&&S.showDoc)view.appendChild(h('div',{class:'docbox',style:'margin:0 0 10px',text:m.doc}));
   view.appendChild(h('p',{class:'note',text:mSig(m)+'  —  색 막대: 파랑=조건, 초록=반복, 주황=예외처리. 칩을 클릭하면 호출 대상 소스를 볼 수 있습니다.'}));
   view.appendChild(box);
 }
@@ -1034,12 +1062,13 @@ function renderClass(view,c){
   if(c.impl.length)b1.appendChild(h('div',{class:'kv',text:'implements '+c.impl.join(', ')}));
   if(c.subs.length){const d=h('div',{class:'kv'},'구현/하위 클래스: ');c.subs.forEach(s=>d.appendChild(h('span',{class:'chip',onclick:()=>select({t:'c',cls:s})},badge(s.layer),s.simple)));b1.appendChild(d);}
   b1.appendChild(h('div',{class:'kv',text:c.file+':'+c.line}));
+  if(c.doc)b1.appendChild(h('div',{class:'docbox',text:c.doc}));
   view.appendChild(b1);
   const deps=[];for(const fn in c.fields){const fi=fieldInfo(c,fn);if(fi&&fi.cls&&fi.cls.layer!=='model')deps.push([fn,fi.cls,c.fields[fn].type]);}
   if(deps.length){const b=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'주입받는 의존 객체 (필드)'}));
     for(const [fn,t,decl] of deps)b.appendChild(h('div',{class:'rk',onclick:()=>select({t:'c',cls:t})},badge(t.layer),h('span',{class:'nm',text:fn+' : '+lastSeg(decl)+(t.simple!==lastSeg(decl)?'  →  실제 '+t.simple:'')})));view.appendChild(b);}
   const b3=h('div',{class:'box'},h('h3',{text:'메서드 '+c.methods.length+'개'}));
-  for(const m of c.methods)b3.appendChild(h('div',{class:'rk',onclick:()=>select({t:'m',m})},h('span',{class:'nm',text:mSig(m)}),m.entries[0]?h('span',{class:'tag url',text:m.entries[0].url}):null,h('span',{class:'v',text:'호출 '+m.out.length+' · 피호출 '+m.inn.length})));
+  for(const m of c.methods)b3.appendChild(h('div',{class:'rk',onclick:()=>select({t:'m',m})},h('span',{class:'nm'},mSig(m),m.sum?h('span',{class:'doc',text:'  — '+m.sum}):null),m.entries[0]?h('span',{class:'tag url',text:m.entries[0].url}):null,h('span',{class:'v',text:'호출 '+m.out.length+' · 피호출 '+m.inn.length})));
   view.appendChild(b3);
 }
 /* ---------- 요약 ---------- */
@@ -1091,6 +1120,7 @@ function focusDetail(it){
     sec.appendChild(h('h4',null,badge(m.cls.layer),' '+mSig(m)));
     sec.appendChild(h('div',{class:'kv',text:m.cls.fqn}));
     sec.appendChild(h('div',{class:'kv',text:m.cls.file+' : '+m.line+'행'}));
+    if(m.doc)sec.appendChild(h('div',{class:'docbox',text:m.doc+(m.docFrom?'\n(주석 출처: '+m.docFrom+')':'')}));
     if(m.entries.length)sec.appendChild(h('div',{class:'kv'},m.entries.map(e=>h('span',{class:'tag url',text:(e.http?e.http+' ':'')+e.url}))));
     sec.appendChild(h('div',{class:'acts'},
       h('button',{onclick:()=>{S.tab='flow';select({t:'m',m});}},'이 메서드 기준 흐름'),
@@ -1098,18 +1128,19 @@ function focusDetail(it){
       h('button',{onclick:()=>{select({t:'m',m});S.tab='rev';render();}},'역추적'),
       h('button',{onclick:()=>select({t:'c',cls:m.cls})},'클래스 보기')));
     box.appendChild(sec);
-    box.appendChild(srcBlock(m.cls.file,m.sl,m.endLine,it.line&&it.line>=m.sl&&it.line<=m.endLine?it.line:0));
+    box.appendChild(srcBlock(m.cls.file,m.dl||m.sl,m.endLine,it.line&&it.line>=m.sl&&it.line<=m.endLine&&!it.root?it.line:0));
   }else if(it.t==='sql'){
     const s=it.sql,sec=h('div',{class:'dsec'});
     sec.appendChild(h('h4',null,badge('sql'),' '+s.sid));
     sec.appendChild(h('div',{class:'kv',text:(s.ns?'namespace: '+s.ns+'  ·  ':'')+CRUD[s.type]+(s.kind==='inline'?'  ·  Java 소스 내 문자열에서 추출(추정)':'')}));
     sec.appendChild(h('div',{class:'kv',text:s.file+' : '+s.line+'행'}));
+    if(s.sum)sec.appendChild(h('div',{class:'docbox',text:s.sum}));
     if(s.tables.length)sec.appendChild(h('div',{class:'kv',style:'margin-top:4px'},s.tables.map(t=>h('span',{class:'tag tb',text:t.name+' ('+t.ops+')',onclick:()=>select({t:'table',tb:DB.tables.get(t.name)})}))));
     sec.appendChild(h('div',{class:'acts'},h('button',{onclick:()=>select({t:'sql',sql:s})},'이 SQL을 쓰는 곳 역추적')));
     box.appendChild(sec);box.appendChild(h('pre',{class:'sql',text:s.text.replace(/\n[ \t]{6,}/g,'\n    ')}));
   }else if(it.t==='c'){
     const c=it.cls,sec=h('div',{class:'dsec'});
-    sec.appendChild(h('h4',null,badge(c.layer),' '+c.simple));sec.appendChild(h('div',{class:'kv',text:c.file}));
+    sec.appendChild(h('h4',null,badge(c.layer),' '+c.simple));sec.appendChild(h('div',{class:'kv',text:c.file}));if(c.doc)sec.appendChild(h('div',{class:'docbox',text:c.doc}));
     box.appendChild(sec);box.appendChild(srcBlock(c.file,1,Math.min(c.endLine||400,c.line+400),0));
   }
   box.scrollTop=0;const hl=box.querySelector('.hl');if(hl)hl.scrollIntoView({block:'center'});
@@ -1120,10 +1151,10 @@ function gsearch(q){
   if(!q){box.style.display='none';return;}
   const out=[];const push=(bd,txt,sub,go)=>{if(out.length<40)out.push(h('div',{class:'it',onmousedown:e=>{e.preventDefault();box.style.display='none';$('gq').value='';go();}},bd,h('span',{class:'mono',text:txt}),h('span',{style:'color:var(--mute);margin-left:auto;font-size:11px',text:sub})));};
   for(const e of DB.entries)if(e.url.toLowerCase().includes(q))push(badge(e.m.cls.layer),e.url,'URL',()=>select({t:'m',m:e.m}));
-  for(const c of DB.classes)if(c.simple.toLowerCase().includes(q))push(badge(c.layer),c.simple,'클래스',()=>select({t:'c',cls:c}));
+  for(const c of DB.classes)if((c.simple+' '+(c.sum||'')).toLowerCase().includes(q))push(badge(c.layer),c.simple,(c.sum?c.sum+' · ':'')+'클래스',()=>select({t:'c',cls:c}));
   for(const t of DB.tables.values())if(t.name.toLowerCase().includes(q))push(badge('table'),t.name,'테이블',()=>select({t:'table',tb:t}));
-  for(const s of DB.sqls)if(out.length<40&&s.sid.toLowerCase().includes(q))push(badge('sql'),s.sid,'SQL',()=>select({t:'sql',sql:s}));
-  for(const m of DB.methods){if(out.length>=40)break;if(!m.acc&&(m.cls.simple+'.'+m.name).toLowerCase().includes(q))push(badge(m.cls.layer),mLabel(m),'메서드',()=>select({t:'m',m}));}
+  for(const s of DB.sqls)if(out.length<40&&(s.sid+' '+(s.sum||'')).toLowerCase().includes(q))push(badge('sql'),s.sid,(s.sum?s.sum+' · ':'')+'SQL',()=>select({t:'sql',sql:s}));
+  for(const m of DB.methods){if(out.length>=40)break;if(!m.acc&&!m.docFrom&&(m.cls.simple+'.'+m.name+' '+(m.sum||'')).toLowerCase().includes(q)||(!m.acc&&m.docFrom&&(m.cls.simple+'.'+m.name+' '+m.sum).toLowerCase().includes(q)&&!m.abstract))push(badge(m.cls.layer),mLabel(m),(m.sum?m.sum+' · ':'')+'메서드',()=>select({t:'m',m}));}
   if(!out.length)box.appendChild(h('div',{class:'it',style:'color:var(--mute)',text:'결과 없음'}));else out.forEach(x=>box.appendChild(x));
   box.style.display='block';
 }
@@ -1186,7 +1217,15 @@ import java.util.List;
 import com.bank.core.transfer.vo.TransferVO;
 
 public interface TransferService {
+    /**
+     * 계좌이체를 실행한다.
+     * 계좌상태 확인 → 일일한도 검증 → 수수료 계산 → 출금/입금 → 이력 기록 순으로 처리한다.
+     * @param vo 이체 요청 정보
+     * @return 결과코드 (0000: 정상, E101: 계좌상태 오류, E201: 한도초과, E301: 잔액부족)
+     */
     String transfer(TransferVO vo) throws Exception;
+
+    /** 당일 이체 내역을 조회한다. */
     List getHistoryList(String acctNo) throws Exception;
 }
 `,
@@ -1257,6 +1296,7 @@ public class TransferServiceImpl implements TransferService {
         return transferHistoryDAO.selectHistoryList(acctNo, baseDate);
     }
 
+    /** 이체 수수료 계산: 100만원 이상 면제, 당일 5회 초과 시 1,000원 */
     private long calcFee(TransferVO vo) throws Exception {
         if (vo.getAmount() >= FEE_FREE_AMOUNT) {
             return 0L;
@@ -1380,10 +1420,12 @@ import com.bank.core.account.vo.AccountVO;
 @Repository("accountDAO")
 public class AccountDAO extends AbstractDAO {
 
+    /** 계좌번호로 계좌 1건을 조회한다. */
     public AccountVO findAccount(String acctNo) throws Exception {
         return (AccountVO) findByPk("findAccountByPk", acctNo);
     }
 
+    // 잔액 증감 (delta 가 음수이면 출금)
     public int updateBalance(String acctNo, long delta) throws Exception {
         return update("updateAccountBalance", new Object[] { new Long(delta), acctNo });
     }
@@ -1404,6 +1446,7 @@ public class AccountVO {
 'sample-bank-core/src/main/java/com/bank/core/limit/service/LimitService.java':String.raw`package com.bank.core.limit.service;
 
 public interface LimitService {
+    /** 일일 이체한도 초과 여부 확인 (true: 이체 가능) */
     boolean checkDailyLimit(String acctNo, long amount) throws Exception;
     void accumulate(String acctNo, long amount) throws Exception;
 }
@@ -1508,6 +1551,7 @@ public class DateUtil {
 'sample-bank-core/src/main/resources/sql/query/mapping-query-transfer.xml':String.raw`<?xml version="1.0" encoding="UTF-8"?>
 <queryservice xmlns="http://www.anyframejava.org/schema/query/mapping">
   <queries>
+    <!-- 계좌 단건 조회 -->
     <query id="findAccountByPk">
       <statement><![CDATA[
         SELECT ACCT_NO, STATUS, BALANCE
