@@ -79,7 +79,9 @@ header .sp{flex:1}
 .tn .row:hover{background:var(--hover)}
 .tn .row.on{background:var(--sel)}
 .tn .tw{width:14px;text-align:center;color:var(--mute);flex:none;user-select:none}
-.tn .kids{margin-left:13px;padding-left:12px;border-left:1px solid var(--line)}
+.tn .kids{margin-left:7px;padding-left:9px;border-left:1px solid var(--line)}
+.tn .kids:hover{border-left-color:var(--accent)}
+.tn .lv{color:var(--mute);font-size:10px;min-width:14px;text-align:right;flex:none;opacity:.75}
 .tn .dim{color:var(--mute);font-size:11.5px}
 .tn .cn{color:var(--mute)}
 .go{visibility:hidden;border:0;background:none;padding:0 4px;color:var(--accent)}
@@ -806,7 +808,7 @@ function render(){
   for(const [k,l] of defs)tabs.appendChild(h('button',{class:S.tab===k?'on':'',onclick:()=>{S.tab=k;render();}},l));
   tool.classList.remove('hide');
   const chk=(key,label)=>h('label',null,h('input',Object.assign({type:'checkbox',onchange:e=>{S[key]=e.target.checked;render();}},S[key]?{checked:''}:{})),label);
-  const depthSel=()=>{const s=h('select',{onchange:e=>{S.depth=+e.target.value;render();}});for(const d of [1,2,3,4,6,8,12])s.appendChild(h('option',Object.assign({value:d},d===S.depth?{selected:''}:{}),d+'단계'));return h('label',null,'펼침 깊이 ',s);};
+  const depthSel=()=>{const s=h('select',{onchange:e=>{S.depth=+e.target.value;render();}});for(const d of [1,2,3,4,6,8,12,20,99])s.appendChild(h('option',Object.assign({value:d},d===S.depth?{selected:''}:{}),d===99?'전체':d+'단계'));return h('label',null,'펼침 깊이 ',s);};
   if(S.tab==='flow'){tool.append(depthSel(),chk('hideAcc','VO·getter/setter 숨김'),chk('hideUtil','Util 숨김'),chk('showDoc','주석 표시'),h('button',{onclick:copyTree},'텍스트로 복사'));renderFlow(view,sel.m);}
   else if(S.tab==='seq'){tool.append(depthSel(),chk('hideAcc','VO·getter/setter 숨김'),chk('hideUtil','Util 숨김'));renderSeq(view,sel.m);}
   else if(S.tab==='logic'){tool.append(chk('showAll','모든 문장 표시'),chk('showDoc','주석 표시'),h('span',{style:'color:var(--mute)'},'분기·반복·예외 구조와 그 안에서 일어나는 호출만 추려 보여줍니다.'));renderLogic(view,sel.m);}
@@ -860,6 +862,7 @@ function buildTree(rootIt,dir,box){
   const getKids=dir==='down'?kidsDown:kidsUp;let budget=700;
   function node(it,path,depth){
     const el=h('div',{class:'tn'}),{row,tw}=rowOf(it,dir);el.appendChild(row);
+    tw.after(h('span',{class:'lv',title:path.size+'단계',text:String(path.size)}));
     const key=itKey(it);
     if(path.has(key)&&it.t==='m'){it.rec=true;row.appendChild(h('span',{class:'tag warn',text:'↻ 순환'}));}
     const ks=it.rec?[]:getKids(it);
