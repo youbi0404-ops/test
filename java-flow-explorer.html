@@ -9,7 +9,7 @@
   --mark:#ffe58a;
   --bg:#f4f5f7; --panel:#ffffff; --panel2:#f9fafb; --line:#dfe3e8; --text:#1c2430; --mute:#6b7685;
   --accent:#2457d6; --accent-bg:#e8eefc; --hover:#eef1f5; --sel:#dde7fd;
-  --c-ctl:#2457d6; --c-svc:#0d8a5f; --c-dao:#b3610b; --c-sql:#8a3fc4; --c-tbl:#c2304a; --c-mdl:#6b7685; --c-utl:#4a7a8c; --c-etc:#7a7f87;
+  --c-scr:#0e7c86; --c-ctl:#2457d6; --c-svc:#0d8a5f; --c-dao:#b3610b; --c-sql:#8a3fc4; --c-tbl:#c2304a; --c-mdl:#6b7685; --c-utl:#4a7a8c; --c-etc:#7a7f87;
   --code-kw:#8a3fc4; --code-str:#0d7a3f; --code-cm:#8b95a3; --warn:#b3610b;
   --mono:Consolas,"D2Coding","Courier New",monospace;
   --sans:"Malgun Gothic","맑은 고딕","Segoe UI",system-ui,sans-serif;
@@ -19,7 +19,7 @@
     --mark:#6b5600;
     --bg:#14171c; --panel:#1b1f26; --panel2:#20252d; --line:#2f3640; --text:#e3e7ec; --mute:#8d97a5;
     --accent:#7aa2ff; --accent-bg:#22304f; --hover:#262c36; --sel:#2a3a5e;
-    --c-ctl:#7aa2ff; --c-svc:#4fcf9d; --c-dao:#f0a34e; --c-sql:#c58df5; --c-tbl:#f27f95; --c-mdl:#8d97a5; --c-utl:#7fb7cc; --c-etc:#9aa0a8;
+    --c-scr:#5fd3dc; --c-ctl:#7aa2ff; --c-svc:#4fcf9d; --c-dao:#f0a34e; --c-sql:#c58df5; --c-tbl:#f27f95; --c-mdl:#8d97a5; --c-utl:#7fb7cc; --c-etc:#9aa0a8;
     --code-kw:#c58df5; --code-str:#6fd08c; --code-cm:#6f7986; --warn:#f0a34e;
   }
 }
@@ -64,7 +64,7 @@ header .sp{flex:1}
 .li.sub{padding-left:30px;background:var(--panel2)}
 .more{padding:8px;text-align:center;color:var(--mute)}
 .bd{display:inline-block;min-width:18px;text-align:center;font:600 10.5px/16px var(--sans);padding:0 4px;border-radius:4px;color:#fff;flex:none}
-.bd.controller{background:var(--c-ctl)} .bd.service{background:var(--c-svc)} .bd.dao{background:var(--c-dao)}
+.bd.screen{background:var(--c-scr)} .bd.controller{background:var(--c-ctl)} .bd.service{background:var(--c-svc)} .bd.dao{background:var(--c-dao)}
 .bd.sql{background:var(--c-sql)} .bd.table{background:var(--c-tbl)} .bd.model{background:var(--c-mdl)} .bd.util{background:var(--c-utl)} .bd.etc{background:var(--c-etc)}
 @media (prefers-color-scheme: dark){.bd{color:#14171c}}
 .tag{display:inline-block;font-size:11px;padding:0 6px;border-radius:9px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
@@ -198,6 +198,7 @@ svg text{font-family:var(--mono);font-size:11.5px;fill:var(--text)}
       <li>브라우저가 "파일 N개를 업로드하시겠습니까?"라고 묻는 것은 로컬 파일 읽기 허용 확인이며 실제 전송은 없습니다.</li>
       <li>메서드·클래스 위의 주석(Javadoc)과 본문 주석, SQL XML 주석을 흐름에 함께 표시하고 주석 내용으로도 검색됩니다.</li>
       <li>"소스 검색"으로 모든 소스에서 문자열을 찾고, 그 줄이 어느 화면(URL)에서 어떤 경로로 실행되는지 확인할 수 있습니다.</li>
+      <li>XPLATFORM 화면(.xfdl / .xjs)이 함께 있으면 화면 버튼 → 스크립트 함수 → 서버 URL → Controller 까지 이어서 보여줍니다.</li>
       <li>.java / .xml 파일을 읽어 URL → Controller → Service → DAO → SQL → 테이블 흐름을 구성합니다.</li>
       <li>Spring XML 빈 설정, Anyframe Query 매핑, iBATIS/MyBatis SQL 맵, Struts 설정, 소스 내 인라인 SQL을 인식합니다.</li>
     </ul>
@@ -248,7 +249,7 @@ function makeDoc(raw,l){
   if(sum.length>90)sum=sum.slice(0,88)+'…';
   return {text:lines.join('\n'),sum,l,name,desc};
 }
-function tokenize(src,base,line0,cm){
+function tokenize(src,base,line0,cm,js){
   base=base||0; const toks=[]; let i=0,line=line0||1; const n=src.length;
   while(i<n){
     const c=src.charCodeAt(i);
@@ -259,7 +260,7 @@ function tokenize(src,base,line0,cm){
     if(ch==='/'&&src[i+1]==='*'){let e=src.indexOf('*/',i+2);if(e<0)e=n;if(cm)cm.push({a:base+i,b:base+Math.min(n,e+2),l:line,text:src.slice(i,e+2)});for(let k=i;k<e;k++)if(src.charCodeAt(k)===10)line++;i=e+2;continue;}
     if(ch==='"'){let j=i+1,s='';while(j<n&&src[j]!=='"'&&src[j]!=='\n'){if(src[j]==='\\'){const x=src[j+1];s+=x==='n'?'\n':x==='t'?'\t':x==='r'?'':(x||'');j+=2;}else s+=src[j++];}
       toks.push({t:'s',v:s,l:line,a:base+i,b:base+j+1});i=j+1;continue;}
-    if(ch==="'"){let j=i+1;while(j<n&&src[j]!=="'"&&src[j]!=='\n'){if(src[j]==='\\')j++;j++;}toks.push({t:'c',v:"'",l:line,a:base+i,b:base+j+1});i=j+1;continue;}
+    if(ch==="'"){let j=i+1,q='';while(j<n&&src[j]!=="'"&&src[j]!=='\n'){if(src[j]==='\\'){j++;}q+=src[j]||'';j++;}toks.push(js?{t:'s',v:q,l:line,a:base+i,b:base+j+1}:{t:'c',v:"'",l:line,a:base+i,b:base+j+1});i=j+1;continue;}
     if(isIdStart(c)){let j=i+1;while(j<n&&isIdPart(src.charCodeAt(j)))j++;toks.push({t:'i',v:src.slice(i,j),l:line,a:base+i,b:base+j});i=j;continue;}
     if(c>=48&&c<=57){let j=i+1;while(j<n&&(isIdPart(src.charCodeAt(j))||(src[j]==='.'&&src.charCodeAt(j+1)>=48&&src.charCodeAt(j+1)<=57)))j++;toks.push({t:'n',v:src.slice(i,j),l:line,a:base+i,b:base+j});i=j;continue;}
     toks.push({t:'o',v:ch,l:line,a:base+i,b:base+i+1});i++;
@@ -274,7 +275,7 @@ function tI(T,i,v){return i>=0&&i<T.length&&T[i].t==='i'&&(v===undefined||T[i].v
 function skipAngle(T,i){let d=0;const lim=Math.min(T.length,i+80);for(let k=i;k<lim;k++){const t=T[k];if(t.t==='o'){if(t.v==='<')d++;else if(t.v==='>'){if(--d===0)return k+1;}else if(!',.?[]&'.includes(t.v))return -1;}else if(t.t!=='i')return -1;}return -1;}
 const MODS=new Set(['public','private','protected','static','final','abstract','synchronized','native','transient','volatile','strictfp','default']);
 const KW=new Set(['if','else','for','while','do','switch','case','default','try','catch','finally','return','throw','new','break','continue','synchronized','instanceof','assert','this','super','class','void','int','long','double','float','boolean','char','byte','short','null','true','false','final','throws','extends','implements','import','package','static','public','private','protected','abstract','interface','enum']);
-const CALLKW=new Set(['if','for','while','switch','catch','synchronized','return','new','super','this','assert','throw','else','do','case']);
+const CALLKW=new Set(['if','for','while','switch','catch','synchronized','return','new','super','this','assert','throw','else','do','case','function','typeof','var','in','delete']);
 
 function parseAnno(T,p){
   let q=p+1,name='';
@@ -304,7 +305,7 @@ function strParts(T,a,b){
   return parts.length&&!expect?parts:null;
 }
 /* 메서드 본문에서 호출 추출 */
-function extractCalls(T,a,b){
+function extractCalls(T,a,b,js){
   const out=[];
   for(let k=a;k<b-1;k++){
     const t=T[k];
@@ -340,7 +341,9 @@ function extractCalls(T,a,b){
       if(q===e||(x.t==='o'&&x.v===','&&d===0)){if(q>as){ac++;if(ap.length<3)ap.push(strParts(T,as,q));}as=q+1;continue;}
       if(x.t==='o'){if(OPEN[x.v])d++;else if(CLOSE[x.v])d--;}
     }
-    out.push({n:t.v,rk,rv,ac,ap,l:t.l});
+    const c0={n:t.v,rk,rv,ac,ap,l:t.l};
+    if(js){const sl=[];for(let q=k+2;q<e&&sl.length<12;q++)if(T[q].t==='s'&&T[q].v)sl.push(T[q].v);if(sl.length)c0.sl=sl;}
+    out.push(c0);
   }
   return out;
 }
@@ -536,11 +539,78 @@ function parseXml(path,text,db){
   return false;
 }
 
+/* ---------- XPLATFORM 화면(.xfdl) / 공통 스크립트(.xjs) ---------- */
+function xattr(tag,name){const m=tag.match(new RegExp('\\s'+name+'\\s*=\\s*"([^"]*)"'));return m?m[1].replace(/&#(\d+);/g,(x,n)=>String.fromCharCode(+n)).replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'):'';}
+function parseXfdl(path,text){
+  const base=path.slice(path.lastIndexOf('/')+1),lib=/\.xjs$/i.test(path);
+  const file={path,pkg:'',imports:[],wild:[],classes:[]};
+  const cls={simple:base,name:base,kind:lib?'script':'screen',layer0:'screen',lib,annos:[],mods:[],ext:[],impl:[],fields:{},methods:[],line:1,endLine:1,file:path,pkg:'[화면] '+path.slice(0,Math.max(0,path.lastIndexOf('/'))),f:file,ui:{title:'',events:[],formId:''}};
+  file.classes.push(cls);
+  // 스크립트 구간
+  const segs=[];let m;const sre=/<Script\b[^>]*>/gi;
+  while((m=sre.exec(text))){let a=sre.lastIndex,b=text.indexOf('</'+'Script>',a);if(b<0)b=text.length;const cd=text.slice(a,a+40).match(/^\s*<!\[CDATA\[/);if(cd){a+=cd[0].length;const ce=text.lastIndexOf(']]>',b);if(ce>a)b=ce;}segs.push([a,b]);sre.lastIndex=b;}
+  if(!segs.length&&lib)segs.push([0,text.length]);
+  const markupEnd=segs.length?segs[0][0]:text.length;
+  if(!lib){
+    const head=text.slice(0,markupEnd),fm=head.match(/<Form\b[^>]*>/);
+    if(fm){cls.ui.formId=xattr(fm[0],'id');cls.ui.title=xattr(fm[0],'titletext');}
+    cls.sum=cls.ui.title||'';cls.doc=cls.ui.title?cls.ui.title+(cls.ui.formId?'  (Form id: '+cls.ui.formId+')':''):'';
+    const tre=/<([A-Za-z]\w*)\b([^<>]*)>/g;let ln=1,lp=0;
+    while((m=tre.exec(head))){
+      if(m[2].indexOf('on')<0&&m[1]!=='Dataset')continue;
+      for(;lp<m.index;lp++)if(head.charCodeAt(lp)===10)ln++;
+      const tag=m[0],id=xattr(tag,'id'),ere=/\s(on[a-z_]+)\s*=\s*"([^"]+)"/g;let e;
+      while((e=ere.exec(tag)))cls.ui.events.push({comp:m[1]==='Form'?'(Form)':id,type:m[1],text:xattr(tag,'text'),event:e[1],handler:e[2].replace(/^this\./,''),line:ln});
+      if(m[1]==='Dataset'&&id){const end=head.indexOf('</Dataset>',m.index),body=tag.endsWith('/>')||end<0?'':head.slice(m.index,end),cols=[];const cre=/<Column\b[^>]*>/g;let c;
+        while((c=cre.exec(body))&&cols.length<200)cols.push(xattr(c[0],'id'));
+        cls.fields[id]={type:'Dataset',annos:[],line:ln,sum:cols.length?'컬럼 '+cols.length+'개: '+cols.slice(0,12).join(', ')+(cols.length>12?' …':''):'',doc:cols.join(', ')};}
+    }
+  }
+  // 스크립트 함수
+  const lineAt=i=>{let n=1;for(let k=0;k<i;k++)if(text.charCodeAt(k)===10)n++;return n;};
+  for(const [a,b] of segs){
+    const CM=[],T=tokenize(text.slice(a,b),a,lineAt(a),CM,true),N=T.length;
+    const lead=A=>{let k=-1;for(let i=CM.length-1;i>=0;i--)if(CM[i].b<=A){k=i;break;}
+      if(k<0||text.slice(CM[k].b,A).trim()!=='')return null;let st=k;
+      while(CM[st].ln&&st>0&&CM[st-1].ln&&text.slice(CM[st-1].b,CM[st].a).trim()==='')st--;
+      return makeDoc(CM.slice(st,k+1).map(c=>c.text).join('\n'),CM[st].l);};
+    for(let i=0;i<N;i++){
+      let nameTok=null,po=-1,st=i;
+      if(tI(T,i,'function')&&tI(T,i+1)&&tO(T,i+2,'(')){nameTok=T[i+1];po=i+2;}
+      else if(tI(T,i)&&tO(T,i+1,'=')&&tI(T,i+2,'function')&&tO(T,i+3,'(')){nameTok=T[i];po=i+3;if(tO(T,i-1,'.')&&tI(T,i-2,'this'))st=i-2;}
+      if(!nameTok)continue;
+      const pe=mt(T,po);let bo=pe+1;while(bo<N&&bo<pe+8&&!tO(T,bo,'{'))bo++;
+      if(!tO(T,bo,'{')){i=pe;continue;}
+      const be=mt(T,bo),params=[];let exp=true;
+      for(let q=po+1;q<pe;q++){if(exp&&T[q].t==='i'){params.push({type:'',name:T[q].v});exp=false;}else if(tO(T,q,','))exp=true;}
+      const me={name:nameTok.v,ret:'',params,mods:['public'],annos:[],line:nameTok.l,sl:T[st].l,endLine:T[be].l,raw:extractCalls(T,bo+1,be,true),locals:{},inline:[],abstract:false,ctor:false,cls,js:true,bodyA:T[bo].a,bodyB:T[be].b,bl:T[bo].l};
+      const dc=lead(T[st].a);if(dc){me.doc=dc.text;me.sum=dc.sum;me.dl=dc.l;}
+      cls.methods.push(me);cls.endLine=T[be].l;i=be;
+    }
+  }
+  return file;
+}
+/* 화면 스크립트의 문자열 → 서버 진입점 / 콜백 함수 매칭 */
+function matchServer(s0,cls){
+  if(!s0||s0.length<3||s0.length>200||/\s/.test(s0.trim()))return null;
+  const own=cls.mByName.get(s0.trim());if(own)return [own[0]];
+  const u=s0.trim().replace(/^[A-Za-z_]\w*::/,'').replace(/[?#].*$/,'');
+  if(!/[\/.]/.test(u))return null;
+  const k1=('/'+u.replace(/^https?:\/\/[^\/]+/,'')).replace(/\/+/g,'/');
+  const l=DB.urlIndex.get(k1);if(l)return l;
+  const seg=k1.slice(k1.lastIndexOf('/')+1),cands=DB.urlSeg.get(seg);
+  if(cands&&seg.includes('.')){const r=cands.filter(e=>k1.endsWith(e.url)||e.url.endsWith(k1)).map(e=>e.m);if(r.length)return r;}
+  const mm=u.match(/^([A-Za-z_]\w*)[.\/#:]([A-Za-z_]\w*)$/);
+  if(mm){const c=beanClass(mm[1])||beanClass(decap(mm[1]))||(DB.bySimple.get(mm[1])||[])[0];
+    if(c&&c.layer!=='screen'&&c.layer!=='model'){const l2=c.mByName.get(mm[2]);if(l2)return [l2[0]];}}
+  return null;
+}
+
 /* =====================================================================
  *  3. 모델 구축 (타입 해석, 호출 그래프)
  * ===================================================================== */
 let DB=null;
-function newDB(){return {nFiles:0,nJava:0,nXml:0,files:[],classes:[],methods:[],sqls:[],tables:new Map(),entries:[],bySimple:new Map(),byFqn:new Map(),beans:new Map(),beanProps:new Map(),urlMaps:[],srcs:new Map(),fails:[],unresolved:0,name:''};}
+function newDB(){return {nFiles:0,nJava:0,nXml:0,nUi:0,uiMiss:0,jsGlobal:new Map(),urlIndex:new Map(),urlSeg:new Map(),files:[],classes:[],methods:[],sqls:[],tables:new Map(),entries:[],bySimple:new Map(),byFqn:new Map(),beans:new Map(),beanProps:new Map(),urlMaps:[],srcs:new Map(),fails:[],unresolved:0,name:''};}
 const decap=s=>s?s[0].toLowerCase()+s.slice(1):s;
 const lastSeg=s=>s.slice(s.lastIndexOf('.')+1);
 function annoOf(list,name){return list.find(a=>a.name===name);}
@@ -596,8 +666,8 @@ function evalParts(parts,cls){
   return s;
 }
 function resolveCall(r,m){
-  const cls=m.cls;let type=null,known=true;
-  switch(r.rk){
+  const cls=m.cls;let type=null,known=true;const scr=cls.layer==='screen';
+  switch(scr&&r.rk!=='self'?'none':r.rk){
     case 'self':type=cls;break;
     case 'super':type=superOf(cls);break;
     case 'field':{const fi=fieldInfo(cls,r.rv);type=fi&&fi.cls;break;}
@@ -616,7 +686,7 @@ function resolveCall(r,m){
   }
   const res={targets:[],sqls:[],line:r.l,name:r.n,type};
   if(type){
-    const mm=findMethod(type,r.n,r.ac);
+    let mm=findMethod(type,r.n,r.ac);if(!mm&&scr)mm=DB.jsGlobal.get(r.n)||null;
     if(mm){
       if(type.kind==='interface'||mm.abstract){
         const seen=new Set();
@@ -626,6 +696,9 @@ function resolveCall(r,m){
       }else res.targets.push(mm);
     }else if(r.rk!=='self'&&r.rk!=='super')res.miss=true;
   }
+  if(scr&&r.sl)for(const s0 of r.sl){const hit=matchServer(s0,cls);
+    if(hit){for(const t of hit)if(!res.targets.includes(t)&&t!==m)res.targets.push(t);}
+    else if(/\.(do|action|jsp|xpl|json)([?#]|$)/i.test(s0.trim()))res.urlMiss=s0.trim();}
   for(const ap of r.ap){
     const s=evalParts(ap,cls);if(!s)continue;
     const l=DB.sqlIndex.get(s);if(l)for(const q of l)if(!res.sqls.includes(q))res.sqls.push(q);
@@ -651,7 +724,7 @@ function buildModel(){
     for(const m of c.methods){m.id=db.methods.length;db.methods.push(m);m.out=[];m.inn=[];m.entries=[];
       if(!c.mByName.has(m.name))c.mByName.set(m.name,[]);c.mByName.get(m.name).push(m);
       m.acc=/^(get|set|is)[A-Z]/.test(m.name)&&m.raw.length===0&&(m.endLine-m.line)<=3;}
-    c.layer=classify(c);
+    c.layer=c.layer0||classify(c);if(c.lib)for(const m of c.methods)if(!db.jsGlobal.has(m.name))db.jsGlobal.set(m.name,m);
     for(const an of ['Service','Component','Repository','Controller','RestController']){const a=annoOf(c.annos,an);if(a){const nm=(a.args.value&&a.args.value.strs[0])||decap(c.simple);if(!db.beans.has(nm))db.beans.set(nm,c.fqn);}}
   }
   for(const c of db.classes)for(const p of parentsOf(c))p.subs.push(c);
@@ -664,16 +737,17 @@ function buildModel(){
   // URL 매핑된 클래스는 컨트롤러 계층으로
   for(const u of db.urlMaps){const c=u.cls?db.byFqn.get(u.cls):beanClass(u.bean);if(c){u.c=c;if(c.layer==='etc')c.layer='controller';}}
   // 호출 해석
-  for(const m of db.methods){
+  const link=m=>{
     const items=[];
-    for(const r of m.raw){const res=resolveCall(r,m);if(res.miss)db.unresolved++;if(res.targets.length||res.sqls.length)items.push(res);}
+    for(const r of m.raw){const res=resolveCall(r,m);if(res.miss)db.unresolved++;if(res.urlMiss){(m.urlMiss=m.urlMiss||[]).push(res.urlMiss);db.uiMiss++;}if(res.targets.length||res.sqls.length)items.push(res);}
     m.inline.forEach((g,i)=>{const info=sqlInfo(g.text);
       const q={key:m.cls.fqn+'.'+m.name+'#inline'+i,sid:m.cls.simple+'.'+m.name+' 인라인SQL'+(m.inline.length>1?' #'+(i+1):''),ns:'',file:m.cls.file,line:g.l,text:g.text,type:info.type,tables:info.tables,kind:'inline',callers:[]};
       db.sqls.push(q);items.push({targets:[],sqls:[q],line:g.l,name:'(inline)'});});
     if(m.sql&&!m.abstract===false)items.push({targets:[],sqls:[m.sql],line:m.line,name:m.name});
     items.sort((a,b)=>a.line-b.line);m.out=items;
     for(const e of items){for(const t of e.targets)if(!t.inn.some(x=>x.from===m))t.inn.push({from:m,line:e.line});for(const q of e.sqls)if(!q.callers.includes(m))q.callers.push(m);}
-  }
+  };
+  for(const m of db.methods)if(m.cls.layer!=='screen')link(m);
   // 테이블
   for(const q of db.sqls)for(const t of q.tables){if(!db.tables.has(t.name))db.tables.set(t.name,{name:t.name,sqls:[]});db.tables.get(t.name).sqls.push({sql:q,ops:t.ops});}
   // 진입점
@@ -699,6 +773,14 @@ function buildModel(){
     for(const m of ms)addE('XML',ms.length>1?u.url+' #'+m.name:u.url,'',m);}
   for(const c of db.classes){if(c.layer!=='controller')continue;
     for(const m of c.methods)if(!m.entries.length&&!m.inn.length&&m.mods.includes('public')&&!m.acc&&!m.abstract&&m.out.length)addE('CTRL','(매핑 미확인) '+c.simple+'.'+m.name,'',m);}
+  // 화면(XPLATFORM) → 서버 연결
+  for(const e of db.entries){if(e.kind!=='URL'&&e.kind!=='XML')continue;const u=e.url.replace(/ #.*$/,'');
+    if(!db.urlIndex.has(u))db.urlIndex.set(u,[]);if(!db.urlIndex.get(u).includes(e.m))db.urlIndex.get(u).push(e.m);
+    const sg=u.slice(u.lastIndexOf('/')+1);if(!db.urlSeg.has(sg))db.urlSeg.set(sg,[]);db.urlSeg.get(sg).push({url:u,m:e.m});}
+  for(const m of db.methods)if(m.cls.layer==='screen')link(m);
+  for(const c of db.classes){if(!c.ui)continue;
+    for(const ev of c.ui.events){const l=c.mByName.get(ev.handler);if(!l)continue;ev.m=l[0];
+      addE('UI',(c.sum?c.sum+' ('+c.simple+')':c.simple)+' › '+(ev.text||ev.comp)+' '+ev.event,'',l[0]);}}
   db.fileMethods=new Map();for(const m of db.methods){const f=m.cls.file;if(!db.fileMethods.has(f))db.fileMethods.set(f,[]);db.fileMethods.get(f).push(m);}
   db.fileSqls=new Map();for(const q of db.sqls)if(q.kind==='xml'){if(!db.fileSqls.has(q.file))db.fileSqls.set(q.file,[]);db.fileSqls.get(q.file).push(q);}
   db.entries.sort((a,b)=>a.url<b.url?-1:a.url>b.url?1:0);
@@ -722,8 +804,8 @@ async function analyze(items,name){
   // items: [{path, read:()=>Promise<string>}]
   const t0=performance.now();
   DB=newDB();DB.name=name;
-  const use=items.filter(f=>/\.(java|xml)$/i.test(f.path)&&!SKIP_DIR.test('/'+f.path));
-  if(!use.length){progress(0,'분석할 .java / .xml 파일을 찾지 못했습니다.');return;}
+  const use=items.filter(f=>/\.(java|xml|xfdl|xjs)$/i.test(f.path)&&!SKIP_DIR.test('/'+f.path));
+  if(!use.length){progress(0,'분석할 .java / .xml / .xfdl 파일을 찾지 못했습니다.');return;}
   showWelcome(true);
   for(let i=0;i<use.length;i++){
     const f=use[i];
@@ -731,6 +813,7 @@ async function analyze(items,name){
       const text=await f.read();
       if(text.length>4e6){DB.fails.push(f.path+' (4MB 초과, 건너뜀)');continue;}
       if(/\.java$/i.test(f.path)){DB.files.push(parseJava(f.path,text));DB.srcs.set(f.path,text);DB.nJava++;}
+      else if(/\.(xfdl|xjs)$/i.test(f.path)){DB.files.push(parseXfdl(f.path,text));DB.srcs.set(f.path,text);DB.nUi++;}
       else if(parseXml(f.path,text,DB)){DB.srcs.set(f.path,text);DB.nXml++;}
     }catch(e){DB.fails.push(f.path+' ('+e.message+')');}
     if(i%40===0){progress(i/use.length*0.9,'파일 분석 중… '+(i+1)+' / '+use.length);await tick();}
@@ -752,7 +835,7 @@ async function fromDrop(dt){
   const roots=Array.from(dt.items).map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
   progress(0,'폴더 읽는 중…');
   async function walk(en){
-    if(en.isFile){if(/\.(java|xml)$/i.test(en.name))items.push({path:en.fullPath.replace(/^\//,''),read:()=>new Promise((res,rej)=>en.file(async f=>{try{res(decode(await f.arrayBuffer(),mode));}catch(e){rej(e);}},rej))});}
+    if(en.isFile){if(/\.(java|xml|xfdl|xjs)$/i.test(en.name))items.push({path:en.fullPath.replace(/^\//,''),read:()=>new Promise((res,rej)=>en.file(async f=>{try{res(decode(await f.arrayBuffer(),mode));}catch(e){rej(e);}},rej))});}
     else if(en.isDirectory&&!SKIP_DIR.test('/'+en.name+'/')){const rd=en.createReader();for(;;){const batch=await new Promise((res,rej)=>rd.readEntries(res,rej));if(!batch.length)break;for(const c of batch)await walk(c);}}
   }
   for(const r of roots)await walk(r);
@@ -769,10 +852,11 @@ function h(tag,attrs){
   for(let i=2;i<arguments.length;i++){const c=arguments[i];if(c==null||c===false)continue;if(Array.isArray(c))c.forEach(x=>x&&el.appendChild(typeof x==='string'?document.createTextNode(x):x));else el.appendChild(typeof c==='string'?document.createTextNode(c):c);}
   return el;
 }
-const LAYER={controller:['C','Controller'],service:['S','Service'],dao:['D','DAO'],model:['V','VO/Model'],util:['U','Util'],etc:['·','기타'],sql:['SQL','SQL'],table:['T','테이블']};
+const kindOf=p=>/\.java$/i.test(p)?'java':/\.(xfdl|xjs)$/i.test(p)?'ui':'xml';
+const LAYER={screen:['UI','화면(XPLATFORM)'],controller:['C','Controller'],service:['S','Service'],dao:['D','DAO'],model:['V','VO/Model'],util:['U','Util'],etc:['·','기타'],sql:['SQL','SQL'],table:['T','테이블']};
 const badge=(layer,txt)=>h('span',{class:'bd '+layer,title:LAYER[layer][1],text:txt||LAYER[layer][0]});
 const mLabel=m=>m.cls.simple+'.'+m.name+'()';
-const mSig=m=>(m.ret?m.ret+' ':'')+m.name+'('+m.params.map(p=>lastSeg(p.type)+' '+p.name).join(', ')+')';
+const mSig=m=>(m.ret?m.ret+' ':'')+m.name+'('+m.params.map(p=>(lastSeg(p.type)+' '+p.name).trim()).join(', ')+')';
 const CRUD={R:'조회',C:'등록',U:'수정',D:'삭제',M:'병합',P:'프로시저','?':'기타'};
 const S={sel:null,tab:'flow',stab:'entry',hist:[],depth:4,hideAcc:true,hideUtil:false,showAll:false,showDoc:true,focusEl:null};
 const docSpan=x=>x&&S.showDoc?h('span',{class:'doc',text:'— '+x,title:x}):null;
@@ -802,7 +886,7 @@ function renderSide(){
         h('div',{class:'t1'},badge(e.m.cls.layer),e.http?h('span',{class:'tag',text:e.http}):null,h('span',{text:e.url,title:e.url})),
         h('div',{class:'t2',text:(e.m.sum?e.m.sum+'  ·  ':'')+mLabel(e.m)+'  ·  '+e.kind})));}
   }else if(S.stab==='class'){
-    const order={controller:0,service:1,dao:2,etc:3,util:4,model:5};
+    const order={screen:-1,controller:0,service:1,dao:2,etc:3,util:4,model:5};
     const list=DB.classes.filter(c=>hit(c.fqn+' '+(c.sum||''))).sort((a,b)=>order[a.layer]-order[b.layer]||(a.simple<b.simple?-1:1));
     for(const c of list){
       const open=S.openCls===c;
@@ -818,9 +902,9 @@ function renderSide(){
         h('div',{class:'t2',text:(s.sum?s.sum+'  ·  ':'')+(s.tables.map(t=>t.name).join(', ')||s.file)})));}
   }else if(S.stab==='file'){
     for(const fp of [...DB.srcs.keys()].sort()){if(!hit(fp))continue;
-      const i=fp.lastIndexOf('/'),isJ=/\.java$/i.test(fp),n=isJ?(DB.fileMethods.get(fp)||[]).length:(DB.fileSqls.get(fp)||[]).length;
+      const i=fp.lastIndexOf('/'),kd=kindOf(fp),isJ=kd!=='xml',n=isJ?(DB.fileMethods.get(fp)||[]).length:(DB.fileSqls.get(fp)||[]).length;
       add(h('div',{class:'li'+(S.sel&&S.sel.path===fp?' on':''),onclick:()=>select({t:'f',path:fp})},
-        h('div',{class:'t1'},h('span',{class:'bd '+(isJ?'etc':'sql'),text:isJ?'J':'X'}),h('span',{text:fp.slice(i+1)}),h('span',{class:'tag',text:n+(isJ?' 메서드':' SQL')})),
+        h('div',{class:'t1'},h('span',{class:'bd '+(kd==='java'?'etc':kd==='ui'?'screen':'sql'),text:kd==='java'?'J':kd==='ui'?'UI':'X'}),h('span',{text:fp.slice(i+1)}),h('span',{class:'tag',text:n+(kd==='java'?' 메서드':kd==='ui'?' 함수':' SQL')})),
         h('div',{class:'t2',text:fp.slice(0,Math.max(0,i)),title:fp})));}
   }else{
     const list=[...DB.tables.values()].sort((a,b)=>a.name<b.name?-1:1);
@@ -880,7 +964,7 @@ function kidsDown(it){
       if(S.hideAcc&&(t.acc||t.cls.layer==='model'))continue;
       if(S.hideUtil&&t.cls.layer==='util')continue;
       const k='m'+t.id,ex=seen.get(k);if(ex){ex.n++;continue;}
-      const x={t:'m',m:t,line:e.line,poly:e.targets.length>1,n:1};seen.set(k,x);out.push(x);}
+      const x={t:'m',m:t,line:e.line,poly:e.targets.length>1&&it.m.cls.layer!=='screen',n:1};seen.set(k,x);out.push(x);}
     for(const s of e.sqls){const k='s'+s.key,ex=seen.get(k);if(ex){ex.n++;continue;}const x={t:'sql',sql:s,line:e.line,n:1};seen.set(k,x);out.push(x);}
   }
   return out;
@@ -1005,7 +1089,7 @@ function renderSeq(view,m){
   const svg=s('svg',{width:W,height:H,viewBox:'0 0 '+W+' '+H});
   const defs=s('defs',{});const mk=s('marker',{id:'ah',markerWidth:8,markerHeight:8,refX:7,refY:4,orient:'auto'});mk.appendChild(s('path',{d:'M0,0 L8,4 L0,8 z',fill:'var(--text)'}));defs.appendChild(mk);svg.appendChild(defs);
   const cx=i=>30+i*CW+CW/2;
-  const cvar={controller:'--c-ctl',service:'--c-svc',dao:'--c-dao',sql:'--c-sql',model:'--c-mdl',util:'--c-utl',etc:'--c-etc'};
+  const cvar={screen:'--c-scr',controller:'--c-ctl',service:'--c-svc',dao:'--c-dao',sql:'--c-sql',model:'--c-mdl',util:'--c-utl',etc:'--c-etc'};
   parts.forEach((p,i)=>{
     svg.appendChild(s('line',{x1:cx(i),y1:TOP-10,x2:cx(i),y2:H-10,stroke:'var(--line)','stroke-dasharray':'4 4'}));
     svg.appendChild(s('rect',{x:cx(i)-74,y:6,width:148,height:26,rx:6,fill:'var(--panel)',stroke:'var('+cvar[p.layer]+')','stroke-width':1.5}));
@@ -1062,9 +1146,9 @@ function parseStmt0(T,p,b){
 function renderLogic(view,m){
   if(m.abstract){view.appendChild(h('div',{class:'empty',text:'본문이 없는 메서드입니다.'}));return;}
   const src=DB.srcs.get(m.cls.file);let T,nodes;const CM=[];let ci=0;
-  try{T=tokenize(src.slice(m.bodyA,m.bodyB),m.bodyA,m.bl,CM);nodes=parseStmts(T,1,T.length-1);}catch(e){view.appendChild(h('div',{class:'empty',text:'로직 구조를 해석하지 못했습니다: '+e.message}));return;}
+  try{T=tokenize(src.slice(m.bodyA,m.bodyB),m.bodyA,m.bl,CM,m.js);nodes=parseStmts(T,1,T.length-1);}catch(e){view.appendChild(h('div',{class:'empty',text:'로직 구조를 해석하지 못했습니다: '+e.message}));return;}
   const txt=(a,b)=>{if(b<=a||!T[a])return '';const s=src.slice(T[a].a,T[Math.min(b,T.length)-1].b).replace(/\s+/g,' ');return s.length>220?s.slice(0,217)+'…':s;};
-  const calls=(a,b)=>{if(b<=a)return [];const out=[];for(const r of extractCalls(T,a,b+1)){const res=resolveCall(r,m);
+  const calls=(a,b)=>{if(b<=a)return [];const out=[];for(const r of extractCalls(T,a,b+1,m.js)){const res=resolveCall(r,m);
       for(const t of res.targets){if(S.hideAcc&&!S.showAll&&(t.acc||t.cls.layer==='model'))continue;out.push({t:'m',m:t});}
       for(const q of res.sqls)out.push({t:'sql',sql:q});}return out;};
   const chips=cs=>cs.map(c=>c.t==='m'
@@ -1123,7 +1207,7 @@ function runSearch(o){
   let re;try{re=new RegExp(o.regex?o.q:o.q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'+(o.cs?'':'i'));}catch(e){res.err='정규식 오류: '+e.message;return res;}
   const MAX=3000;
   for(const p of [...DB.srcs.keys()].sort()){
-    const isJ=/\.java$/i.test(p);if((o.scope==='java'&&!isJ)||(o.scope==='xml'&&isJ))continue;
+    const kd=kindOf(p),isJ=kd!=='xml';if(o.scope!=='all'&&o.scope!==kd)continue;
     const src=DB.srcs.get(p);re.lastIndex=0;let m,hits=null,pos=0,line=1;
     while((m=re.exec(src))){
       if(m[0]===''){re.lastIndex++;continue;}
@@ -1148,7 +1232,7 @@ function renderSearch(head,tool,view,sel){
   const go=()=>{o.q=$('fq').value;sel.res=null;render();const f=$('fq');f.focus();f.setSelectionRange(f.value.length,f.value.length);};
   const chk=(k,l)=>h('label',null,h('input',Object.assign({type:'checkbox',onchange:e=>{o[k]=e.target.checked;sel.res=null;o.q=$('fq').value;render();}},o[k]?{checked:''}:{})),l);
   const sc=h('select',{onchange:e=>{o.scope=e.target.value;sel.res=null;o.q=$('fq').value;render();}});
-  for(const [v,l] of [['all','Java + XML'],['java','Java만'],['xml','XML만']])sc.appendChild(h('option',Object.assign({value:v},o.scope===v?{selected:''}:{}),l));
+  for(const [v,l] of [['all','전체'],['java','Java만'],['ui','화면(xfdl/xjs)만'],['xml','XML만']])sc.appendChild(h('option',Object.assign({value:v},o.scope===v?{selected:''}:{}),l));
   tool.append(h('input',{type:'text',id:'fq',value:o.q,placeholder:'찾을 문자열 입력 후 Enter (예: 테이블명, 에러코드, 변수명, 주석 문구)',style:'flex:1;min-width:220px',onkeydown:e=>{if(e.key==='Enter')go();}}),h('button',{class:'pri',onclick:go},'검색'),chk('cs','대소문자 구분'),chk('regex','정규식'),sc);
   if(!o.q){view.appendChild(h('div',{class:'empty',text:'찾을 문자열을 입력하세요. 결과의 줄을 클릭하면 오른쪽에 해당 소스와 "흐름상 위치"(어느 화면/URL에서 어떤 경로로 도달하는지)가 표시됩니다.'}));return;}
   if(!sel.res)sel.res=runSearch(o);
@@ -1158,7 +1242,7 @@ function renderSearch(head,tool,view,sel){
   if(!res.total){view.appendChild(h('div',{class:'empty',text:'일치하는 내용이 없습니다.'}));return;}
   let onRow=null;
   for(const f of res.files){
-    const i=f.path.lastIndexOf('/'),isJ=/\.java$/i.test(f.path);
+    const i=f.path.lastIndexOf('/'),isJ=kindOf(f.path)!=='xml';
     const box=h('div',{class:'box',style:'margin-bottom:10px;padding:8px 10px'});
     box.appendChild(h('div',{class:'fh',title:'파일 구조 보기',onclick:()=>select({t:'f',path:f.path})},h('b',{text:f.path.slice(i+1)}),h('span',{class:'tag',text:f.hits.length+'줄'}),h('span',{class:'dir',text:f.path.slice(0,Math.max(0,i))})));
     let last;
@@ -1167,7 +1251,7 @@ function renderSearch(head,tool,view,sel){
       if(own!==last){last=own;
         if(m)box.appendChild(h('div',{class:'mh',onclick:()=>select({t:'m',m})},badge(m.cls.layer),h('span',{style:'color:var(--text)',text:mLabel(m)}),m.sum?h('span',{class:'doc',text:'— '+m.sum}):null,m.entries[0]?h('span',{class:'tag url',text:m.entries[0].url}):null));
         else if(q)box.appendChild(h('div',{class:'mh',onclick:()=>select({t:'sql',sql:q})},badge('sql'),h('span',{style:'color:var(--text)',text:q.sid}),q.sum?h('span',{class:'doc',text:'— '+q.sum}):null));
-        else box.appendChild(h('div',{class:'mh',style:'cursor:default',text:isJ?'(메서드 밖: 필드 · import · 클래스 주석 등)':'(SQL 밖)'}));}
+        else box.appendChild(h('div',{class:'mh',style:'cursor:default',text:isJ?'(메서드 밖: 필드 · import · 화면 레이아웃 등)':'(SQL 밖)'}));}
       const lead=ht.text.length-ht.text.replace(/^\s+/,'').length,cut=Math.min(lead,ht.a);
       const t=ht.text.slice(cut,cut+400),a=ht.a-cut,b=ht.b-cut;
       const row=h('div',{class:'hr'},h('span',{class:'ln',text:String(ht.line)}),h('span',null,t.slice(0,a),h('mark',{text:t.slice(a,b)}),t.slice(b)));
@@ -1181,8 +1265,8 @@ function renderSearch(head,tool,view,sel){
   }
 }
 function renderFile(head,tool,view,sel){
-  const fp=sel.path,i=fp.lastIndexOf('/'),isJ=/\.java$/i.test(fp);
-  head.appendChild(h('span',{class:'bd '+(isJ?'etc':'sql'),text:isJ?'J':'X'}));
+  const fp=sel.path,i=fp.lastIndexOf('/'),kd=kindOf(fp),isJ=kd!=='xml';
+  head.appendChild(h('span',{class:'bd '+(kd==='java'?'etc':kd==='ui'?'screen':'sql'),text:kd==='java'?'J':kd==='ui'?'UI':'X'}));
   head.appendChild(h('span',{class:'ttl',text:fp.slice(i+1)}));head.appendChild(h('span',{class:'sub',text:fp.slice(0,Math.max(0,i)),title:fp}));
   tool.classList.add('hide');
   view.appendChild(h('p',{class:'note',text:'이 파일에 들어 있는 '+(isJ?'클래스와 메서드':'SQL')+'입니다. 항목을 클릭하면 흐름 화면으로 이동합니다. 전체 소스는 오른쪽에 표시됩니다.'}));
@@ -1207,7 +1291,7 @@ function chainsTo(m,max){
   const out=[],par=new Map([[m,null]]),q=[m];let n=0;
   while(q.length&&out.length<max&&n++<8000){
     const x=q.shift();
-    if(x.entries.length){const path=[];for(let c=x;c;c=par.get(c))path.push(c);out.push({e:x.entries[0],more:x.entries.length-1,path});if(x!==m)continue;}
+    if(x.entries.length&&(x.entries.some(e=>e.kind==='UI')||!x.inn.some(i=>i.from.cls.layer==='screen'))){const path=[];for(let c=x;c;c=par.get(c))path.push(c);out.push({e:x.entries[0],more:x.entries.length-1,path});if(x!==m)continue;}
     for(const i of x.inn)if(!par.has(i.from)){par.set(i.from,x);q.push(i.from);}
   }
   return out;
@@ -1251,8 +1335,19 @@ function renderClass(view,c){
   const deps=[];for(const fn in c.fields){const fi=fieldInfo(c,fn);if(fi&&fi.cls&&fi.cls.layer!=='model')deps.push([fn,fi.cls,c.fields[fn].type]);}
   if(deps.length){const b=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'주입받는 의존 객체 (필드)'}));
     for(const [fn,t,decl] of deps)b.appendChild(h('div',{class:'rk',onclick:()=>select({t:'c',cls:t})},badge(t.layer),h('span',{class:'nm',text:fn+' : '+lastSeg(decl)+(t.simple!==lastSeg(decl)?'  →  실제 '+t.simple:'')})));view.appendChild(b);}
+  if(c.ui){
+    if(c.ui.events.length){const b=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'화면 이벤트 '+c.ui.events.length+'개 (컴포넌트 → 처리 함수)'}));
+      for(const ev of c.ui.events)b.appendChild(h('div',{class:'rk',onclick:ev.m?()=>select({t:'m',m:ev.m}):null},h('span',{class:'tag',text:ev.type}),h('span',{class:'nm'},(ev.text?ev.text+'  ':'')+ev.comp+' . '+ev.event+'  →  '+ev.handler+'()',ev.m&&ev.m.sum?h('span',{class:'doc',text:'  — '+ev.m.sum}):null),ev.m?null:h('span',{class:'tag warn',text:'함수 없음'})));
+      view.appendChild(b);}
+    const sv=[],miss=[];for(const m of c.methods){for(const e of m.out)for(const t of e.targets)if(t.cls.layer!=='screen')sv.push([m,t]);for(const u of m.urlMiss||[])miss.push([m,u]);}
+    const b2=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'서버 호출 '+sv.length+'건'+(miss.length?' · 연결 못한 URL '+miss.length+'건':'')}));
+    if(!sv.length&&!miss.length)b2.appendChild(h('div',{class:'note',text:'이 화면에서 서버 호출을 찾지 못했습니다.'}));
+    for(const [m,t] of sv)b2.appendChild(h('div',{class:'rk',onclick:()=>select({t:'m',m})},h('span',{class:'nm',text:m.name+'()  →  '+(t.entries[0]?t.entries[0].url+'  ':'')+mLabel(t)}),badge(t.cls.layer)));
+    for(const [m,u] of miss)b2.appendChild(h('div',{class:'rk',onclick:()=>select({t:'m',m})},h('span',{class:'nm',text:m.name+'()  →  '+u}),h('span',{class:'tag warn',text:'Java 진입점 미연결'})));
+    view.appendChild(b2);
+  }
   const nf=Object.keys(c.fields).length;
-  if(nf){const b=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:'필드 '+nf+'개'+(c.layer==='model'?' (항목 정의)':'')}));b.appendChild(fieldTable(c));if(c.layer==='model')view.insertBefore(b,view.children[1]||null);else view.appendChild(b);}
+  if(nf){const b=h('div',{class:'box',style:'margin-bottom:12px'},h('h3',{text:(c.ui?'데이터셋 ':'필드 ')+nf+'개'+(c.layer==='model'?' (항목 정의)':'')}));b.appendChild(fieldTable(c));if(c.layer==='model')view.insertBefore(b,view.children[1]||null);else view.appendChild(b);}
   const b3=h('div',{class:'box'},h('h3',{text:'메서드 '+c.methods.length+'개'}));
   for(const m of c.methods)b3.appendChild(h('div',{class:'rk',onclick:()=>select({t:'m',m})},h('span',{class:'nm'},mSig(m),m.sum?h('span',{class:'doc',text:'  — '+m.sum}):null),m.entries[0]?h('span',{class:'tag url',text:m.entries[0].url}):null,h('span',{class:'v',text:'호출 '+m.out.length+' · 피호출 '+m.inn.length})));
   view.appendChild(b3);
@@ -1261,7 +1356,7 @@ function renderClass(view,c){
 function renderDash(view){
   const cards=h('div',{class:'cards'});
   const card=(n,l)=>cards.appendChild(h('div',{class:'card'},h('div',{class:'n',text:String(n)}),h('div',{class:'l',text:l})));
-  card(DB.nJava,'Java 파일');card(DB.nXml,'설정/SQL XML');card(DB.classes.length,'클래스');card(DB.methods.length,'메서드');card(DB.entries.length,'진입점(URL 등)');card(DB.sqls.length,'SQL');card(DB.tables.size,'테이블');card(DB.unresolved,'해석 못한 호출');
+  card(DB.nJava,'Java 파일');card(DB.nXml,'설정/SQL XML');if(DB.nUi){card(DB.nUi,'화면/스크립트(xfdl·xjs)');card(DB.uiMiss,'화면→서버 미연결 URL');}card(DB.classes.length,'클래스');card(DB.methods.length,'메서드');card(DB.entries.length,'진입점(URL 등)');card(DB.sqls.length,'SQL');card(DB.tables.size,'테이블');card(DB.unresolved,'해석 못한 호출');
   view.appendChild(cards);
   view.appendChild(h('p',{class:'note',text:'왼쪽 목록에서 진입점(URL)이나 메서드를 고르면 호출 흐름이 그려집니다. 분석 시간 '+DB.ms+'ms.'}));
   const g=h('div',{class:'grid2'});view.appendChild(g);
@@ -1280,7 +1375,7 @@ function renderDash(view){
   if(DB.fails.length){const b=h('div',{class:'box'},h('h3',{text:'읽지 못한 파일 '+DB.fails.length+'건'}));DB.fails.slice(0,50).forEach(f=>b.appendChild(h('div',{class:'kv',text:f})));g.appendChild(b);}
 }
 /* ---------- 상세 패널 ---------- */
-const JKW=/^(abstract|boolean|break|byte|case|catch|char|class|continue|default|do|double|else|enum|extends|final|finally|float|for|if|implements|import|instanceof|int|interface|long|new|null|package|private|protected|public|return|short|static|super|switch|synchronized|this|throw|throws|try|void|volatile|while|true|false)$/;
+const JKW=/^(function|var|abstract|boolean|break|byte|case|catch|char|class|continue|default|do|double|else|enum|extends|final|finally|float|for|if|implements|import|instanceof|int|interface|long|new|null|package|private|protected|public|return|short|static|super|switch|synchronized|this|throw|throws|try|void|volatile|while|true|false)$/;
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function hiJava(code){
   const re=/(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*")|\b([A-Za-z_]\w*)\b/g;let out='',last=0,m;
@@ -1795,6 +1890,123 @@ public class DateUtil {
     </query>
   </queries>
 </queryservice>
+`,
+'sample-bank-core/src/main/webapp/xui/transfer/TRF0100.xfdl':String.raw`<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.4">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TRF0100" classname="TRF0100" position="absolute 0 0 1024 768" titletext="계좌이체" onload="form_onload">
+    <Layouts>
+      <Layout>
+        <Edit id="edt_fromAcctNo" taborder="0" position="absolute 120 20 300 44"/>
+        <Edit id="edt_toAcctNo" taborder="1" position="absolute 120 50 300 74"/>
+        <MaskEdit id="msk_amount" taborder="2" position="absolute 120 80 300 104"/>
+        <Button id="btn_execute" taborder="3" text="이체실행" position="absolute 320 20 400 44" onclick="btn_execute_onclick"/>
+        <Button id="btn_history" taborder="4" text="내역조회" position="absolute 410 20 490 44" onclick="btn_history_onclick"/>
+        <Grid id="grd_history" taborder="5" binddataset="ds_history" position="absolute 20 120 1000 740"/>
+      </Layout>
+    </Layouts>
+    <Objects>
+      <Dataset id="ds_cond">
+        <ColumnInfo>
+          <Column id="fromAcctNo" type="STRING" size="20"/>
+          <Column id="toAcctNo" type="STRING" size="20"/>
+          <Column id="amount" type="BIGDECIMAL" size="15"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_history">
+        <ColumnInfo>
+          <Column id="seq" type="INT" size="10"/>
+          <Column id="toAcctNo" type="STRING" size="20"/>
+          <Column id="amount" type="BIGDECIMAL" size="15"/>
+          <Column id="resultCd" type="STRING" size="4"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Script type="xscript4.0"><![CDATA[
+include "lib::comTransaction.xjs";
+
+/**
+ * @name_ko 화면 로드
+ * @desc 화면이 열리면 당일 이체 내역을 조회한다.
+ */
+function form_onload(obj:Form, e:LoadEventInfo)
+{
+    fn_searchHistory();
+}
+
+/**
+ * @name_ko 이체실행 버튼 클릭
+ */
+function btn_execute_onclick(obj:Button, e:ClickEventInfo)
+{
+    // 입력값 검증
+    if (!fn_validate()) {
+        return;
+    }
+    if (!confirm("이체하시겠습니까?")) {
+        return;
+    }
+    // 공통 트랜잭션 함수로 서버 호출
+    gfn_transaction("execute", "transfer/execute.do", "ds_cond=ds_cond", "", "", "fn_callback");
+}
+
+function btn_history_onclick(obj:Button, e:ClickEventInfo)
+{
+    fn_searchHistory();
+}
+
+/**
+ * @name_ko 이체내역 조회
+ */
+function fn_searchHistory()
+{
+    transaction("history", "svc::transfer/history.do", "ds_cond=ds_cond", "ds_history=ds_history", "", "fn_callback");
+}
+
+/**
+ * @name_ko 입력값 검증
+ */
+function fn_validate()
+{
+    if (edt_fromAcctNo.value == "" || edt_toAcctNo.value == "") {
+        alert("계좌번호를 입력하세요.");
+        return false;
+    }
+    if (msk_amount.value <= 0) {
+        alert('이체금액을 확인하세요.');
+        return false;
+    }
+    return true;
+}
+
+/**
+ * @name_ko 트랜잭션 콜백
+ */
+function fn_callback(svcID, errCode, errMsg)
+{
+    if (errCode < 0) {
+        alert(errMsg);
+        return;
+    }
+    if (svcID == "execute") {
+        fn_searchHistory();
+    }
+}
+]]><${'/'}Script>
+  </Form>
+</FDL>
+`,
+'sample-bank-core/src/main/webapp/xui/lib/comTransaction.xjs':String.raw`<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript4.0"><![CDATA[
+/**
+ * @name_ko 공통 트랜잭션 호출
+ * @desc 서비스 접두어(svc::)를 붙여 서버를 호출한다.
+ */
+function gfn_transaction(svcID, url, inDs, outDs, args, callback)
+{
+    transaction(svcID, "svc::" + url, inDs, outDs, args, callback);
+}
+]]><${'/'}Script>
 `,
 'sample-bank-core/src/main/resources/sql/ibatis/Limit.xml':String.raw`<?xml version="1.0" encoding="UTF-8"?>
 <sqlMap namespace="Limit">
